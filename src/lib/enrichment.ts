@@ -73,59 +73,54 @@ Rules:
 - Finish by calling record_company_profile exactly once.`;
 
 /**
- * Research the company behind an enquiry's sender domain and store the profile.
+ * Research a company and store the profile against its domain.
  *
- * Runs off the webhook request path — see the route handler. Never throws:
- * a failure here must not affect the inbound email pipeline, which has already
- * returned 200 to Mailgun by the time this runs.
+ * Keyed on the company rather than the enquiry, so a second person writing
+ * from the same employer reuses this profile instead of paying for the same
+ * research again.
+ *
+ * Runs off the webhook request path. Never throws: a failure here must not
+ * affect the inbound pipeline, which has already returned 200 to Mailgun.
  */
-export async function enrichEnquiry(enquiryId: string): Promise<void> {
+export async function enrichCompany(companyId: string): Promise<void> {
   const supabase = createAdminClient();
 
-  const { data: enquiry, error: readError } = await supabase
-    .from("enquiries")
-    .select("id, sender_domain, sender_email, subject, body_plain, enrichment_status")
-    .eq("id", enquiryId)
+  const { data: company, error: readError } = await supabase
+    .from("companies")
+    .select("id, domain, enrichment_status")
+    .eq("id", companyId)
     .single();
 
-  if (readError || !enquiry) {
-    console.error("[enrich] could not load enquiry", enquiryId, readError?.message);
+  if (readError || !company) {
+    console.error("[enrich] could not load company", companyId, readError?.message);
     return;
   }
-  if (enquiry.enrichment_status !== "pending") {
-    console.log("[enrich] already processed", enquiryId, enquiry.enrichment_status);
+  if (company.enrichment_status !== "pending") {
+    console.log("[enrich] already researched", company.domain, company.enrichment_status);
+    return;
+  }
+  if (isPersonalDomain(company.domain)) {
+    console.log("[enrich] personal domain, refusing to research:", company.domain);
     return;
   }
 
   const setStatus = async (fields: Record<string, unknown>) => {
-    await supabase.from("enquiries").update(fields).eq("id", enquiryId);
+    await supabase.from("companies").update(fields).eq("id", companyId);
   };
 
-  if (isPersonalDomain(enquiry.sender_domain)) {
-    console.log("[enrich] personal domain, skipping:", enquiry.sender_domain);
-    await setStatus({
-      enrichment_status: "skipped_personal_domain",
-      enriched_at: new Date().toISOString(),
-    });
-    return;
-  }
-
   if (!(await claimClaudeCall())) {
-    console.warn("[enrich] daily cap reached, skipping", enquiryId);
+    console.warn("[enrich] daily cap reached, skipping", company.domain);
     await setStatus({ enrichment_status: "capped" });
     return;
   }
+
 
   try {
     const client = createClaudeClient();
     const messages: Anthropic.MessageParam[] = [
       {
         role: "user",
-        content:
-          `Research the company at the email domain: ${enquiry.sender_domain}\n\n` +
-          `For context, this is the enquiry they sent (do not research the individual, only the company):\n` +
-          `Subject: ${enquiry.subject ?? "(none)"}\n` +
-          `${(enquiry.body_plain ?? "").slice(0, 1500)}`,
+        content: `Research the company that uses the email domain: ${company.domain}`,
       },
     ];
 
@@ -169,7 +164,7 @@ export async function enrichEnquiry(enquiryId: string): Promise<void> {
     await recordTokens(totalIn, totalOut);
 
     if (!profile) {
-      console.warn("[enrich] no profile recorded for", enquiry.sender_domain);
+      console.warn("[enrich] no profile recorded for", company.domain);
       await setStatus({
         enrichment_status: "failed",
         enrichment_error: "Model finished without calling record_company_profile",
@@ -178,18 +173,18 @@ export async function enrichEnquiry(enquiryId: string): Promise<void> {
     }
 
     await setStatus({
-      company_profile: profile,
+      profile,
       enrichment_status: "enriched",
       enrichment_error: null,
       enriched_at: new Date().toISOString(),
     });
     console.log(
-      "[enrich] profiled", enquiry.sender_domain,
+      "[enrich] profiled", company.domain,
       "->", profile.company_name, `(confidence: ${profile.confidence})`,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("[enrich] failed for", enquiry.sender_domain, message);
+    console.error("[enrich] failed for", company.domain, message);
     await setStatus({ enrichment_status: "failed", enrichment_error: message.slice(0, 500) });
   }
 }

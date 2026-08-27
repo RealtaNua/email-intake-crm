@@ -2,7 +2,8 @@ import { NextResponse, after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseFromHeader, verifyMailgunSignature } from "@/lib/mailgun";
 import { requireEnv } from "@/lib/env";
-import { enrichEnquiry } from "@/lib/enrichment";
+import { enrichCompany } from "@/lib/enrichment";
+import { resolveContact } from "@/lib/contacts";
 import { classifyEnquiry } from "@/lib/classification";
 
 // node:crypto and the service_role key both require the Node runtime.
@@ -73,9 +74,20 @@ export async function POST(request: Request) {
   }
 
   const supabase = createAdminClient();
+
+  // Resolve the company and contact this email belongs to before storing the
+  // message. The relationship is the durable thing; the email is an event
+  // against it.
+  const { contactId, companyId, companyNeedsResearch } = await resolveContact({
+    email: senderEmail,
+    name: parsed.name,
+    domain: senderEmail.split("@")[1]?.toLowerCase() ?? null,
+  });
+
   const { data, error } = await supabase
     .from("enquiries")
     .insert({
+      contact_id: contactId,
       message_id: field("Message-Id") ?? field("message-id"),
       sender_email: senderEmail,
       sender_name: parsed.name,
@@ -106,9 +118,13 @@ export async function POST(request: Request) {
   // Enrichment runs after the response is sent. Mailgun gets its 200 straight
   // away and does not retry; the Claude calls happen on borrowed time.
   after(async () => {
-    // Order matters: classification reads the company profile enrichment
-    // produces, so a bad enrichment degrades the rating rather than breaking it.
-    await enrichEnquiry(data.id);
+    // Order matters: classification reads the company profile, so research
+    // runs first. A failed research degrades the rating rather than breaking it.
+    // Research only runs for a company we have not already profiled, so repeat
+    // senders from a known employer cost nothing extra.
+    if (companyId && companyNeedsResearch) {
+      await enrichCompany(companyId);
+    }
     await classifyEnquiry(data.id);
   });
 

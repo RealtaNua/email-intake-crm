@@ -5,6 +5,15 @@ import { BUSINESS_CONTEXT } from "@/lib/business-context";
 
 export type Priority = "urgent" | "high" | "normal" | "low";
 
+type ContactJoin = {
+  id: string;
+  name: string | null;
+  status: string;
+  total_received: number;
+  notes: { text: string }[] | null;
+  companies: { domain: string; profile: unknown } | null;
+};
+
 const CLASSIFY_TOOL: Anthropic.Tool = {
   name: "record_priority",
   description: "Record the triage decision for this enquiry. Call exactly once.",
@@ -48,6 +57,8 @@ HOW TO JUDGE
   "urgent" in an email means very little; a stated budget and a fixed date mean a lot.
 - A polite, unhurried email from a government agency with a real budget outranks an
   agitated email from someone selling software.
+- An existing relationship changes everything. Someone already recorded as a paying
+  client, or with notes on file, is not a cold enquiry — say so in your reasoning.
 - Use the company profile when one is supplied. A large regional employer with a
   procurement budget is a different prospect from an unknown two-person outfit,
   and you should say so in your reasoning.
@@ -72,7 +83,7 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
   const { data: enquiry, error: readError } = await supabase
     .from("enquiries")
     .select(
-      "id, sender_email, sender_name, sender_domain, subject, body_plain, company_profile, classification_status",
+      "id, sender_email, sender_name, sender_domain, subject, body_plain, classification_status, contacts ( id, name, status, total_received, notes, companies ( domain, profile ) )",
     )
     .eq("id", enquiryId)
     .single();
@@ -99,9 +110,24 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
   try {
     const client = createClaudeClient();
 
-    const profileSection = enquiry.company_profile
-      ? `COMPANY PROFILE (researched from the sender's domain):\n${JSON.stringify(enquiry.company_profile, null, 2)}`
+    // The contact carries the durable relationship: the company profile, the
+    // running notes, and anything recorded about money. All of it is relevant
+    // to how urgent a new message from this person is.
+    const contact = (enquiry as unknown as { contacts: ContactJoin | null }).contacts;
+    const profile = contact?.companies?.profile ?? null;
+
+    const profileSection = profile
+      ? `COMPANY PROFILE (researched from the sender's domain):\n${JSON.stringify(profile, null, 2)}`
       : `No company profile — the sender used a personal email domain, or research found nothing.`;
+
+    const relationshipSection = contact
+      ? `EXISTING RELATIONSHIP\n` +
+        `Status: ${contact.status}\n` +
+        `Total received to date: ${contact.total_received}\n` +
+        (Array.isArray(contact.notes) && contact.notes.length
+          ? `Notes on file:\n${contact.notes.map((n) => `- ${n.text}`).join("\n")}`
+          : `No notes on file.`)
+      : `No contact record.`;
 
     const response = await client.messages.create({
       model: MODEL,
@@ -117,7 +143,7 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
             `Domain: ${enquiry.sender_domain ?? "unknown"}\n` +
             `Subject: ${enquiry.subject ?? "(no subject)"}\n\n` +
             `${(enquiry.body_plain ?? "(empty body)").slice(0, 4000)}\n\n` +
-            `${profileSection}`,
+            `${profileSection}\n\n${relationshipSection}`,
         },
       ],
       tools: [CLASSIFY_TOOL],

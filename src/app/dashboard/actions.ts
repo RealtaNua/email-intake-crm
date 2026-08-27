@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { enrichEnquiry } from "@/lib/enrichment";
+import { enrichCompany } from "@/lib/enrichment";
 import { classifyEnquiry } from "@/lib/classification";
 
 /**
@@ -13,6 +13,37 @@ import { classifyEnquiry } from "@/lib/classification";
  * whatever state they were in, and because a transient failure (a capped day,
  * a timeout) otherwise leaves a record permanently blank with no way back.
  */
+export async function reprocessContact(contactId: string) {
+  const supabase = await createServerSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const admin = createAdminClient();
+
+  const { data: contact } = await admin
+    .from("contacts").select("id, company_id").eq("id", contactId).single();
+  if (!contact) throw new Error("Contact not found");
+
+  if (contact.company_id) {
+    await admin
+      .from("companies")
+      .update({ enrichment_status: "pending", enrichment_error: null })
+      .eq("id", contact.company_id);
+    await enrichCompany(contact.company_id);
+  }
+
+  const { data: enquiries } = await admin
+    .from("enquiries").select("id").eq("contact_id", contactId);
+
+  for (const e of enquiries ?? []) {
+    await admin.from("enquiries").update({ classification_status: "pending" }).eq("id", e.id);
+    await classifyEnquiry(e.id);
+  }
+
+  revalidatePath(`/dashboard/${contactId}`);
+  revalidatePath("/dashboard");
+}
+
 export async function reprocessEnquiry(enquiryId: string) {
   // Server actions are publicly callable endpoints. The auth check is not
   // optional — without it, anyone who can guess an id can spend Claude credit.
@@ -23,14 +54,9 @@ export async function reprocessEnquiry(enquiryId: string) {
   const admin = createAdminClient();
   await admin
     .from("enquiries")
-    .update({
-      enrichment_status: "pending",
-      classification_status: "pending",
-      enrichment_error: null,
-    })
+    .update({ classification_status: "pending" })
     .eq("id", enquiryId);
 
-  await enrichEnquiry(enquiryId);
   await classifyEnquiry(enquiryId);
 
   revalidatePath(`/dashboard/${enquiryId}`);
