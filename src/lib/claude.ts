@@ -11,7 +11,7 @@ export function createClaudeClient() {
 
 function dailyCap(): number {
   const raw = Number(process.env.ENRICHMENT_DAILY_CAP);
-  return Number.isFinite(raw) && raw > 0 ? raw : 100;
+  return Number.isFinite(raw) && raw > 0 ? raw : 25;
 }
 
 /**

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { parseFromHeader, verifyMailgunSignature } from "@/lib/mailgun";
 import { requireEnv } from "@/lib/env";
 import { enrichEnquiry } from "@/lib/enrichment";
+import { classifyEnquiry } from "@/lib/classification";
 
 // node:crypto and the service_role key both require the Node runtime.
 export const runtime = "nodejs";
@@ -105,7 +106,10 @@ export async function POST(request: Request) {
   // Enrichment runs after the response is sent. Mailgun gets its 200 straight
   // away and does not retry; the Claude calls happen on borrowed time.
   after(async () => {
+    // Order matters: classification reads the company profile enrichment
+    // produces, so a bad enrichment degrades the rating rather than breaking it.
     await enrichEnquiry(data.id);
+    await classifyEnquiry(data.id);
   });
 
   return NextResponse.json({ ok: true, id: data.id }, { status: 200 });

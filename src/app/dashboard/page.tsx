@@ -14,6 +14,57 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+const PRIORITY_STYLES: Record<string, string> = {
+  urgent: "bg-red-100 text-red-900 ring-red-200",
+  high: "bg-orange-100 text-orange-900 ring-orange-200",
+  normal: "bg-sky-100 text-sky-900 ring-sky-200",
+  low: "bg-slate-100 text-slate-600 ring-slate-200",
+};
+
+/** The rating is only useful with the reasoning attached, so they render together. */
+function PriorityPanel({ enquiry }: { enquiry: Enquiry }) {
+  if (enquiry.classification_status === "pending") {
+    return <span className="text-xs text-slate-400">Triaging…</span>;
+  }
+  if (enquiry.classification_status === "capped") {
+    return <span className="text-xs text-amber-700">Not triaged (daily limit)</span>;
+  }
+  if (!enquiry.priority) return null;
+
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs font-medium uppercase tracking-wide ring-1 ${
+        PRIORITY_STYLES[enquiry.priority] ?? PRIORITY_STYLES.low
+      }`}
+    >
+      {enquiry.priority}
+    </span>
+  );
+}
+
+function PriorityReasoning({ enquiry }: { enquiry: Enquiry }) {
+  if (!enquiry.priority_reasoning) return null;
+  return (
+    <div className="mt-3 border-l-2 border-slate-200 pl-3">
+      <p className="text-sm text-slate-700">{enquiry.priority_reasoning}</p>
+      {enquiry.priority_signals?.length ? (
+        <ul className="mt-2 flex flex-wrap gap-1.5">
+          {enquiry.priority_signals.map((signal, i) => (
+            <li key={i} className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
+              {signal}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {enquiry.respond_by ? (
+        <p className="mt-2 text-xs text-slate-500">
+          Respond by: <span className="text-slate-700">{enquiry.respond_by}</span>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /** Renders whatever enrichment produced — including the honest failure states. */
 function CompanyPanel({ enquiry }: { enquiry: Enquiry }) {
   const profile = enquiry.company_profile;
@@ -154,6 +205,8 @@ export default async function DashboardPage() {
                 <p className="font-medium text-slate-900">
                   {enquiry.subject || <span className="text-slate-400">(no subject)</span>}
                 </p>
+                <span className="flex shrink-0 items-center gap-2">
+                <PriorityPanel enquiry={enquiry} />
                 <time
                   dateTime={enquiry.received_at}
                   title={new Date(enquiry.received_at).toISOString()}
@@ -161,6 +214,7 @@ export default async function DashboardPage() {
                 >
                   {timeAgo(enquiry.received_at)}
                 </time>
+                </span>
               </div>
 
               <p className="mt-1 text-sm text-slate-600">
@@ -179,6 +233,7 @@ export default async function DashboardPage() {
                 </p>
               ) : null}
 
+              <PriorityReasoning enquiry={enquiry} />
               <CompanyPanel enquiry={enquiry} />
             </li>
           ))}

@@ -34,12 +34,12 @@ returns 200. Enrichment happens off the request path.
 - [x] 1. Scaffold Next.js, connect Supabase + Vercel
 - [x] 2. Inbound webhook writing raw rows — **confirmed end to end with a real email**
 - [x] 3. Bare dashboard listing rows
-- [ ] 4. Company-domain enrichment (Claude + web search)
-- [ ] 5. Priority classification (Claude)
+- [x] 4. Company-domain enrichment (Claude + web search)
+- [x] 5. Priority classification (Claude)
 - [ ] 6. Supabase Auth (Google + email/password, sign-up and sign-in)
 - [ ] 7. Per-enquiry detail view, sender history
 - [ ] 8. Chat-based record updates
-- [ ] 9. Rate limit / daily cap on the public webhook
+- [x] 9. Rate limit / daily cap on the public webhook — *pulled forward to step 4*
 
 ## Debugging log
 
@@ -144,9 +144,15 @@ showed `accepted → accepted → delivered 200 OK`) rather than infer from an a
 
 - **Supabase free-tier projects pause after inactivity.** A paused project means the
   webhook's insert fails and Mailgun retries. A keep-alive is planned.
-- **The webhook is a public endpoint that will trigger paid Claude calls** once enrichment
-  lands. HMAC signature verification is already in place, so only Mailgun can invoke it;
-  a hard daily cap is build-order step 9, before this is considered deployable.
+- **The webhook is a public endpoint that triggers paid Claude calls.** HMAC signature
+  verification means only Mailgun can invoke it, and a hard daily cap (`ENRICHMENT_DAILY_CAP`,
+  currently 25) bounds the spend. The cap is claimed with a single atomic Postgres
+  statement and fails closed. Measured cost is roughly \$0.15-0.25 per enriched enquiry
+  at medium effort; a full-effort run measured \$0.54, almost entirely from web search
+  results being fed back into context.
+- **Priority quality depends on `src/lib/business-context.ts`.** That file describes what
+  a valuable enquiry looks like for this specific business. It is the difference between
+  real triage and a keyword rule, and it should be edited to match reality.
 - **Deploys are manual** (`vercel deploy --prod`). The GitHub repo is not yet connected
   to the Vercel project for automatic deploys on push.
 

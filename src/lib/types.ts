@@ -16,4 +16,10 @@ export type Enquiry = {
   enrichment_status: string;
   enrichment_error: string | null;
   enriched_at: string | null;
+  priority: "urgent" | "high" | "normal" | "low" | null;
+  priority_reasoning: string | null;
+  priority_signals: string[] | null;
+  respond_by: string | null;
+  classification_status: string;
+  classified_at: string | null;
 };
