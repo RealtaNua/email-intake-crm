@@ -1,4 +1,5 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { redirect } from "next/navigation";
+import { createServerSupabase } from "@/lib/supabase/server";
 import type { Enquiry } from "@/lib/types";
 
 // Always read fresh. An enquiry that arrived seconds ago is the whole point.
@@ -147,10 +148,15 @@ function CompanyPanel({ enquiry }: { enquiry: Enquiry }) {
 }
 
 export default async function DashboardPage() {
-  // Read server-side with the service_role key. RLS is on with no policies,
-  // so the anon key would return an empty array here. Auth arrives at step 6
-  // and this becomes a per-user query.
-  const supabase = createAdminClient();
+  // Reads as the logged-in user now, not as service_role. RLS policies added
+  // in migration 0004 are what permit this; without them the query returns an
+  // empty array rather than an error, which is a quiet way to lose data.
+  const supabase = await createServerSupabase();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  // Middleware already gates this route; this is defence in depth, and it
+  // gives us the user object for the header.
+  if (!user) redirect("/login");
   const { data, error } = await supabase
     .from("enquiries")
     .select("*")
@@ -182,9 +188,20 @@ export default async function DashboardPage() {
             </code>
           </p>
         </div>
-        <span className="shrink-0 text-sm tabular-nums text-slate-500">
-          {enquiries.length} {enquiries.length === 1 ? "record" : "records"}
-        </span>
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="text-sm tabular-nums text-slate-500">
+            {enquiries.length} {enquiries.length === 1 ? "record" : "records"}
+          </span>
+          <form action="/auth/signout" method="post">
+            <button
+              type="submit"
+              title={user.email ?? undefined}
+              className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-50"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
       </header>
 
       {enquiries.length === 0 ? (
