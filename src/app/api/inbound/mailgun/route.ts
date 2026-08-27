@@ -102,6 +102,7 @@ export async function POST(request: Request) {
             recipient: toEmail,
             subject: field("subject"),
             body_plain: field("stripped-text") ?? field("body-plain"),
+            body_full: field("body-plain"),
             body_html: field("body-html"),
             raw_payload: rawPayload,
           })
@@ -137,6 +138,8 @@ export async function POST(request: Request) {
       recipient: field("recipient"),
       subject: field("subject"),
       body_plain: field("stripped-text") ?? field("body-plain"),
+      // Stripped for the model, full for the reader.
+      body_full: field("body-plain"),
       body_html: field("body-html"),
       raw_payload: rawPayload,
     })

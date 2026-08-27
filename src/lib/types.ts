@@ -64,6 +64,7 @@ export type Enquiry = {
   recipient: string | null;
   subject: string | null;
   body_plain: string | null;
+  body_full: string | null;
   body_html: string | null;
   status: string;
   direction: "inbound" | "outbound";
@@ -81,7 +82,8 @@ export type ContactWithRelations = Contact & {
   companies: Pick<Company, "domain" | "profile" | "enrichment_status"> | null;
   enquiries: Pick<
     Enquiry,
-    "id" | "subject" | "priority" | "received_at" | "direction" | "body_plain" | "summary"
+    | "id" | "subject" | "priority" | "received_at" | "direction"
+    | "body_plain" | "body_full" | "summary" | "sender_name" | "sender_email" | "recipient"
   >[];
 };
 

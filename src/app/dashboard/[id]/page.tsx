@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { reprocessContact, logReply, saveRemarks } from "../actions";
 import { LocalTime } from "@/components/local-time";
+import { MessageView } from "@/components/message-view";
 import {
   PRIORITY_STYLES, CONVERSATION_LABELS, CONVERSATION_STYLES,
   type Contact, type Company, type Enquiry,
@@ -273,9 +274,9 @@ export default async function ContactPage({
                       <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-900">
                         {message.subject || "(no subject)"} — show full message
                       </summary>
-                      <pre className="mt-2 whitespace-pre-wrap rounded-lg bg-white p-3 font-sans text-sm text-slate-700 ring-1 ring-slate-200">
-                        {message.body_plain || "(empty)"}
-                      </pre>
+                      <div className="mt-2">
+                        <MessageView message={message} />
+                      </div>
                     </details>
                   </div>
                 </li>

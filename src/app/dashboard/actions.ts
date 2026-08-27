@@ -88,6 +88,7 @@ export async function logReply(contactId: string, formData: FormData) {
       recipient: contact.email,
       subject,
       body_plain: body,
+      body_full: body,
       classification_status: "pending",
     })
     .select("id")

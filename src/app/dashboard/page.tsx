@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { LocalTime } from "@/components/local-time";
+import { MessageView } from "@/components/message-view";
 import {
   PRIORITY_STYLES, CONVERSATION_LABELS, CONVERSATION_STYLES,
   topPriority, type ContactWithRelations,
@@ -18,7 +19,7 @@ export default async function DashboardPage() {
   // why this reads from contacts rather than from the message log.
   const { data, error } = await supabase
     .from("contacts")
-    .select("*, companies ( domain, profile, enrichment_status ), enquiries ( id, subject, priority, received_at, direction, body_plain, summary )")
+    .select("*, companies ( domain, profile, enrichment_status ), enquiries ( id, subject, priority, received_at, direction, body_plain, body_full, summary, sender_name, sender_email, recipient )")
     .order("last_seen_at", { ascending: false })
     .limit(100);
 
@@ -148,9 +149,9 @@ export default async function DashboardPage() {
                               </span>
                               {message.summary || message.subject || "(no subject)"}
                             </summary>
-                            <pre className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-sans text-sm text-slate-700">
-                              {message.body_plain || "(empty)"}
-                            </pre>
+                            <div className="mt-2">
+                              <MessageView message={message} />
+                            </div>
                           </details>
                         </li>
                       );
