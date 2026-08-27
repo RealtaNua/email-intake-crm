@@ -116,17 +116,22 @@ function LoginForm() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6 py-16">
-      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand to-brand-deep px-6 py-16">
+      <div className="card w-full max-w-sm p-8">
+      <div className="mb-6 flex items-center gap-2.5">
+        <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand/10 text-base text-brand">✉</span>
+        <span className="text-[15px] font-semibold tracking-tight text-ink">Intake&nbsp;CRM</span>
+      </div>
+      <h1 className="text-xl font-semibold tracking-tight text-ink">
         {mode === "signin" ? "Sign in" : "Create an account"}
       </h1>
-      <p className="mt-1 text-sm text-slate-500">Email Intake &amp; Triage CRM</p>
+      <p className="mt-1 text-sm text-ink-muted">Email intake and triage</p>
 
       <button
         type="button"
         onClick={handleGoogle}
         disabled={busy}
-        className="mt-8 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+        className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-slate-50 disabled:opacity-50"
       >
         <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
           <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.7v3h3.9c2.3-2.1 3.5-5.2 3.5-8.9z" />
@@ -138,27 +143,27 @@ function LoginForm() {
       </button>
 
       <div className="my-6 flex items-center gap-3">
-        <hr className="flex-1 border-slate-200" />
-        <span className="text-xs text-slate-400">or</span>
-        <hr className="flex-1 border-slate-200" />
+        <hr className="flex-1 border-slate-100" />
+        <span className="text-xs text-ink-muted">or</span>
+        <hr className="flex-1 border-slate-100" />
       </div>
 
       <form onSubmit={handleEmailPassword} className="space-y-3">
         <div>
-          <label htmlFor="email" className="block text-sm text-slate-700">Email</label>
+          <label htmlFor="email" className="block text-sm font-medium text-ink">Email</label>
           <input
             id="email" type="email" required autoComplete="email"
             value={email} onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
+            className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm outline-none transition-colors focus:border-brand focus:bg-white"
           />
         </div>
         <div>
-          <label htmlFor="password" className="block text-sm text-slate-700">Password</label>
+          <label htmlFor="password" className="block text-sm font-medium text-ink">Password</label>
           <input
             id="password" type="password" required minLength={6}
             autoComplete={mode === "signup" ? "new-password" : "current-password"}
             value={password} onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
+            className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm outline-none transition-colors focus:border-brand focus:bg-white"
           />
         </div>
 
@@ -171,22 +176,23 @@ function LoginForm() {
 
         <button
           type="submit" disabled={busy}
-          className="w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:opacity-50"
+          className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-deep disabled:opacity-50"
         >
           {busy ? "Working…" : mode === "signin" ? "Sign in" : "Create account"}
         </button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-slate-500">
+      <p className="mt-6 text-center text-sm text-ink-muted">
         {mode === "signin" ? "No account yet?" : "Already have an account?"}{" "}
         <button
           type="button"
           onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(null); setNotice(null); }}
-          className="font-medium text-slate-900 underline underline-offset-2"
+          className="font-medium text-brand hover:underline"
         >
           {mode === "signin" ? "Create one" : "Sign in"}
         </button>
       </p>
+      </div>
     </main>
   );
 }

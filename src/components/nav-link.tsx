@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-/** Highlights the section you are actually in. */
+/** Highlights the section you are actually in. Sits on the gradient header. */
 export function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
   const pathname = usePathname();
   // /dashboard must not light up for every child route, but /dashboard/usage
@@ -14,10 +14,10 @@ export function NavLink({ href, children }: { href: string; children: React.Reac
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+      className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
         active
-          ? "bg-slate-900 text-white"
-          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          ? "bg-white text-brand-deep shadow-sm"
+          : "text-white/80 hover:bg-white/15 hover:text-white"
       }`}
     >
       {children}

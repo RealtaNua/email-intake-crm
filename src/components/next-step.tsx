@@ -17,16 +17,18 @@ export function NextStep({
   if (!text || text.trim().toLowerCase() === "none") return null;
 
   const styles = urgent
-    ? "border-red-300 bg-red-50 text-red-900"
-    : "border-amber-300 bg-amber-50 text-amber-900";
-  const labelStyles = urgent ? "text-red-700" : "text-amber-700";
+    ? "border-red-200 bg-red-50/70 text-red-900"
+    : "border-amber-200 bg-amber-50/70 text-amber-900";
+  const dot = urgent ? "bg-red-500" : "bg-amber-500";
+  const labelStyles = urgent ? "text-red-600" : "text-amber-600";
 
   return (
-    <div className={`rounded-lg border-l-4 px-4 py-3 ${styles} ${className}`}>
-      <p className={`text-xs font-semibold uppercase tracking-wide ${labelStyles}`}>
+    <div className={`rounded-xl border px-4 py-3 ${styles} ${className}`}>
+      <p className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide ${labelStyles}`}>
+        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden="true" />
         Next step
       </p>
-      <p className="mt-1 font-bold">{text}</p>
+      <p className="mt-1 font-bold leading-snug">{text}</p>
     </div>
   );
 }

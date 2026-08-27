@@ -29,36 +29,36 @@ export default async function CompaniesPage() {
   const companies = (data ?? []) as unknown as CompanyRow[];
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
+    <>
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Companies</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-2xl font-semibold tracking-tight text-white">Companies</h1>
+        <p className="mt-0.5 text-sm text-white/70">
           Researched once per domain. Contacts from a known company reuse the profile
           rather than paying for it again.
         </p>
       </header>
 
       {companies.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 px-6 py-16 text-center">
-          <p className="text-slate-900">No companies yet</p>
-          <p className="mt-1 text-sm text-slate-500">
+        <div className="card px-6 py-16 text-center">
+          <p className="font-medium text-ink">No companies yet</p>
+          <p className="mt-1 text-sm text-ink-muted">
             Companies appear when someone writes in from a work email domain.
           </p>
         </div>
       ) : (
-        <ul className="space-y-3">
+        <ul className="space-y-4">
           {companies.map((company) => (
-            <li key={company.id} className="rounded-xl border border-slate-200 p-5">
+            <li key={company.id} className="card card-hover p-6">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="font-medium text-slate-900">
+                <p className="font-semibold text-ink">
                   {company.profile?.company_name ?? company.domain}
                 </p>
-                <span className="shrink-0 text-xs text-slate-400">{company.domain}</span>
+                <span className="shrink-0 text-xs text-ink-muted">{company.domain}</span>
               </div>
 
               {company.profile ? (
                 <>
-                  <p className="mt-1.5 text-sm text-slate-700">{company.profile.what_they_do}</p>
+                  <p className="mt-1.5 text-sm text-ink">{company.profile.what_they_do}</p>
                   <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600">
                     {company.profile.industry ? (
                       <div><dt className="inline text-slate-400">Industry: </dt><dd className="inline">{company.profile.industry}</dd></div>
@@ -102,6 +102,6 @@ export default async function CompaniesPage() {
           ))}
         </ul>
       )}
-    </main>
+    </>
   );
 }

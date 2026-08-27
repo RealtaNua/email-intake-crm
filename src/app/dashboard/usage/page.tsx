@@ -55,39 +55,39 @@ export default async function UsagePage() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
-      <header>
-        <h1 className="text-xl font-semibold tracking-tight text-slate-900">Claude usage</h1>
-        <p className="mt-1 text-sm text-slate-500">
+    <>
+      <header className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-white">Claude usage</h1>
+        <p className="mt-0.5 text-sm text-white/70">
           Every call, what it was for, and what it cost. The daily cap counts calls, not dollars.
         </p>
       </header>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 p-4">
-          <p className="text-xs text-slate-400">Today (UTC)</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="card p-5">
+          <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Today (UTC)</p>
+          <p className="mt-1.5 text-3xl font-semibold tabular-nums text-ink">
             ${spentToday.toFixed(2)}
           </p>
-          <p className="text-xs text-slate-500">{today.length} calls</p>
+          <p className="mt-1 text-xs text-ink-muted">{today.length} calls</p>
         </div>
-        <div className="rounded-lg border border-slate-200 p-4">
-          <p className="text-xs text-slate-400">Last 200 calls</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">
+        <div className="card p-5">
+          <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Last 200 calls</p>
+          <p className="mt-1.5 text-3xl font-semibold tabular-nums text-ink">
             ${spentAll.toFixed(2)}
           </p>
-          <p className="text-xs text-slate-500">{calls.length} calls</p>
+          <p className="mt-1 text-xs text-ink-muted">{calls.length} calls</p>
         </div>
-        <div className="rounded-lg border border-slate-200 p-4">
-          <p className="text-xs text-slate-400">Average per call</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">
+        <div className="card p-5">
+          <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Average per call</p>
+          <p className="mt-1.5 text-3xl font-semibold tabular-nums text-ink">
             ${calls.length ? (spentAll / calls.length).toFixed(3) : "0.000"}
           </p>
         </div>
       </div>
 
-      <section className="mt-8">
-        <h2 className="text-sm font-medium text-slate-900">Where it goes</h2>
+      <section className="card mt-4 p-6">
+        <h2 className="text-sm font-semibold text-ink">Where it goes</h2>
         <ul className="mt-2 space-y-1">
           {[...byPurpose.entries()]
             .sort((a, b) => b[1].cost - a[1].cost)
@@ -105,8 +105,8 @@ export default async function UsagePage() {
         </ul>
       </section>
 
-      <section className="mt-8">
-        <h2 className="text-sm font-medium text-slate-900">Recent calls</h2>
+      <section className="card mt-4 p-6">
+        <h2 className="text-sm font-semibold text-ink">Recent calls</h2>
         {calls.length === 0 ? (
           <p className="mt-2 text-sm text-slate-500">
             No calls logged yet. Logging started when this table was added — earlier calls
@@ -157,6 +157,6 @@ export default async function UsagePage() {
           </div>
         )}
       </section>
-    </main>
+    </>
   );
 }

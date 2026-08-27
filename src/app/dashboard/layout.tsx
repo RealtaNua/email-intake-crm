@@ -22,42 +22,54 @@ export default async function DashboardLayout({
     .gte("created_at", startOfDayUtc.toISOString());
   const spentToday = (todaysCalls ?? []).reduce((sum, c) => sum + Number(c.cost_usd), 0);
 
+  const initial = (user.email ?? "?").charAt(0).toUpperCase();
+
   return (
-    <div className="min-h-screen bg-white">
-      <header className="border-b border-slate-200">
-        <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-x-6 gap-y-3 px-6 py-3">
-          <Link href="/dashboard" className="text-sm font-semibold tracking-tight text-slate-900">
-            Intake CRM
-          </Link>
-
-          <nav className="flex items-center gap-1" aria-label="Main">
-            <NavLink href="/dashboard">Contacts</NavLink>
-            <NavLink href="/dashboard/companies">Companies</NavLink>
-            <NavLink href="/dashboard/usage">Usage</NavLink>
-          </nav>
-
-          <div className="ml-auto flex items-center gap-3">
-            <Link
-              href="/dashboard/usage"
-              title="Claude spend today"
-              className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs tabular-nums text-slate-600 transition-colors hover:bg-slate-50"
-            >
-              ${spentToday.toFixed(2)} today
+    <div className="min-h-screen">
+      {/* The header block extends well past the nav so cards can overlap it,
+          which is what gives the layout depth rather than a flat band. */}
+      <div className="bg-gradient-to-br from-brand to-brand-deep pb-24">
+        <header className="mx-auto max-w-5xl px-6 pt-5">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <Link href="/dashboard" className="flex items-center gap-2.5">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/15 text-base backdrop-blur">
+                ✉
+              </span>
+              <span className="text-[15px] font-semibold leading-tight tracking-tight text-white">
+                Intake&nbsp;CRM
+              </span>
             </Link>
-            <form action="/auth/signout" method="post">
-              <button
-                type="submit"
-                title={user.email ?? undefined}
-                className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-50"
-              >
-                Sign out
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
 
-      {children}
+            <nav className="flex items-center gap-1" aria-label="Main">
+              <NavLink href="/dashboard">Contacts</NavLink>
+              <NavLink href="/dashboard/companies">Companies</NavLink>
+              <NavLink href="/dashboard/usage">Usage</NavLink>
+            </nav>
+
+            <div className="ml-auto flex items-center gap-3">
+              <Link
+                href="/dashboard/usage"
+                title="Claude spend today"
+                className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium tabular-nums text-white backdrop-blur transition-colors hover:bg-white/25"
+              >
+                ${spentToday.toFixed(2)} today
+              </Link>
+              <form action="/auth/signout" method="post">
+                <button
+                  type="submit"
+                  title={`Signed in as ${user.email ?? ""} — sign out`}
+                  className="grid h-9 w-9 place-items-center rounded-full bg-white/20 text-sm font-semibold text-white backdrop-blur transition-colors hover:bg-white/30"
+                >
+                  {initial}
+                </button>
+              </form>
+            </div>
+          </div>
+        </header>
+      </div>
+
+      {/* Pulled up over the gradient. */}
+      <div className="mx-auto -mt-20 max-w-5xl px-6 pb-16">{children}</div>
     </div>
   );
 }

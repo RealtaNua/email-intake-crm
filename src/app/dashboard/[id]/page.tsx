@@ -5,10 +5,8 @@ import { reprocessContact, logReply, saveRemarks } from "../actions";
 import { LocalTime } from "@/components/local-time";
 import { MessageView } from "@/components/message-view";
 import { NextStep } from "@/components/next-step";
-import {
-  PRIORITY_STYLES, CONVERSATION_LABELS, CONVERSATION_STYLES,
-  type Contact, type Company, type Enquiry,
-} from "@/lib/types";
+import { Badge, PRIORITY_TONE, CONVERSATION_TONE } from "@/components/badge";
+import { CONVERSATION_LABELS, type Contact, type Company, type Enquiry } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 // Reprocessing runs research plus a classification per enquiry, inline.
@@ -57,39 +55,39 @@ export default async function ContactPage({
   const colleagues = colleagueData ?? [];
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10">
-      <Link href="/dashboard" className="text-sm text-slate-500 hover:text-slate-900">
-        ← All contacts
-      </Link>
-
-      <header className="mt-6">
-        <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+    <>
+      <div className="mb-6">
+        <Link href="/dashboard" className="text-sm text-white/70 hover:text-white">
+          ← All contacts
+        </Link>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">
           {contact.name || contact.email}
         </h1>
-        <p className="mt-1 text-sm text-slate-600">{contact.email}</p>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-700">{contact.status}</span>
+        <p className="mt-0.5 text-sm text-white/70">{contact.email}</p>
+      </div>
+
+      <div className="card p-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone={contact.status === "new" ? "slate" : "emerald"}>{contact.status}</Badge>
           {contact.total_received > 0 ? (
-            <span className="rounded bg-emerald-50 px-2 py-0.5 text-emerald-800">
-              ${Number(contact.total_received).toLocaleString()} received
-            </span>
+            <Badge tone="emerald">${Number(contact.total_received).toLocaleString()} received</Badge>
           ) : null}
-          <span className="text-slate-400">
+          <span className="text-xs text-ink-muted">
             {enquiries.length} {enquiries.length === 1 ? "message" : "messages"} · first contact{" "}
             <LocalTime iso={contact.first_seen_at} variant="date" />
           </span>
         </div>
-      </header>
+      </div>
 
       {/* ── Where this stands ───────────────────────────────── */}
       {contact.conversation_status || contact.next_step ? (
-        <section className="mt-6 rounded-lg border border-slate-200 p-4">
+        <section className="card mt-4 p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-medium text-slate-900">Where this stands</h2>
+            <h2 className="text-sm font-semibold text-ink">Where this stands</h2>
             {contact.conversation_status ? (
-              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${CONVERSATION_STYLES[contact.conversation_status] ?? ""}`}>
+              <Badge tone={CONVERSATION_TONE[contact.conversation_status] ?? "slate"}>
                 {CONVERSATION_LABELS[contact.conversation_status] ?? contact.conversation_status}
-              </span>
+              </Badge>
             ) : null}
           </div>
           <NextStep
@@ -104,8 +102,8 @@ export default async function ContactPage({
       ) : null}
 
       {/* ── Special remarks ─────────────────────────────────── */}
-      <section className="mt-6">
-        <h2 className="text-sm font-medium text-slate-900">Special remarks</h2>
+      <section className="card mt-4 p-6">
+        <h2 className="text-sm font-semibold text-ink">Special remarks</h2>
         <p className="mt-1 text-xs text-slate-400">
           Yours. Never written or overwritten by the model.
         </p>
@@ -125,7 +123,7 @@ export default async function ContactPage({
           />
           <button
             type="submit"
-            className="mt-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-50"
+            className="mt-2 rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-deep"
           >
             Save remarks
           </button>
@@ -133,8 +131,8 @@ export default async function ContactPage({
       </section>
 
       {/* ── Company ─────────────────────────────────────────── */}
-      <section className="mt-8">
-        <h2 className="text-sm font-medium text-slate-900">Company</h2>
+      <section className="card mt-4 p-6">
+        <h2 className="text-sm font-semibold text-ink">Company</h2>
         {profile ? (
           <div className="mt-2 rounded-lg bg-slate-50 p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -196,8 +194,8 @@ export default async function ContactPage({
       </section>
 
       {/* ── Notes ───────────────────────────────────────────── */}
-      <section className="mt-8">
-        <h2 className="text-sm font-medium text-slate-900">Notes</h2>
+      <section className="card mt-4 p-6">
+        <h2 className="text-sm font-semibold text-ink">Notes</h2>
         {contact.notes?.length ? (
           <ul className="mt-2 space-y-2">
             {contact.notes.map((note, i) => (
@@ -218,8 +216,8 @@ export default async function ContactPage({
       </section>
 
       {/* ── Conversation timeline ───────────────────────────── */}
-      <section className="mt-8">
-        <h2 className="text-sm font-medium text-slate-900">Conversation</h2>
+      <section className="card mt-4 p-6">
+        <h2 className="text-sm font-semibold text-ink">Conversation</h2>
         <p className="mt-1 text-xs text-slate-400">
           Oldest first, both directions. Times shown in your timezone — hover for the full timestamp.
         </p>
@@ -233,23 +231,23 @@ export default async function ContactPage({
                 <li key={message.id} className="relative">
                   <span
                     className={`absolute -left-[21px] top-2 h-2 w-2 rounded-full ${
-                      outbound ? "bg-slate-300" : "bg-slate-900"
+                      outbound ? "bg-slate-300" : "bg-brand"
                     }`}
                     aria-hidden="true"
                   />
                   <div className={`rounded-lg border p-4 ${outbound ? "border-slate-200 bg-slate-50" : "border-slate-200"}`}>
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <p className="min-w-0 text-sm text-slate-800">
-                        <span className={`mr-2 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${outbound ? "bg-slate-200 text-slate-600" : "bg-slate-900 text-white"}`}>
+                        <span className={`mr-2 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${outbound ? "bg-slate-100 text-slate-500" : "bg-brand/10 text-brand"}`}>
                           {outbound ? "We" : "They"}
                         </span>
                         {message.summary || message.subject || "(no subject)"}
                       </p>
                       <span className="flex shrink-0 items-center gap-2">
                         {!outbound && message.priority ? (
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium uppercase tracking-wide ring-1 ${PRIORITY_STYLES[message.priority]}`}>
+                          <Badge tone={PRIORITY_TONE[message.priority] ?? "slate"} uppercase>
                             {message.priority}
-                          </span>
+                          </Badge>
                         ) : null}
                         <LocalTime iso={message.received_at} className="text-xs tabular-nums text-slate-400" />
                       </span>
@@ -312,7 +310,7 @@ export default async function ContactPage({
           />
           <button
             type="submit"
-            className="mt-2 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+            className="mt-2 rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-deep"
           >
             Log reply
           </button>
@@ -327,11 +325,11 @@ export default async function ContactPage({
           "use server";
           await reprocessContact(id);
         }}
-        className="mt-8 border-t border-slate-200 pt-6"
+        className="card mt-4 p-6"
       >
         <button
           type="submit"
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-50"
+          className="rounded-lg border border-slate-200 px-3.5 py-2 text-sm font-medium text-ink transition-colors hover:bg-slate-50"
         >
           Re-run research &amp; triage
         </button>
@@ -339,6 +337,6 @@ export default async function ContactPage({
           Re-researches the company and re-rates every enquiry. Counts against the daily cap.
         </span>
       </form>
-    </main>
+    </>
   );
 }
