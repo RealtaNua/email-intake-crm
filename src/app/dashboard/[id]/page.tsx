@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { reprocessContact } from "../actions";
-import { PRIORITY_STYLES, type Contact, type Company, type Enquiry } from "@/lib/types";
+import { reprocessContact, logReply, saveRemarks } from "../actions";
+import {
+  PRIORITY_STYLES, CONVERSATION_LABELS, CONVERSATION_STYLES,
+  type Contact, type Company, type Enquiry,
+} from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 // Reprocessing runs research plus a classification per enquiry, inline.
@@ -74,6 +77,55 @@ export default async function ContactPage({
           </span>
         </div>
       </header>
+
+      {/* ── Where this stands ───────────────────────────────── */}
+      {contact.conversation_summary ? (
+        <section className="mt-6 rounded-lg border border-slate-200 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-medium text-slate-900">Where this stands</h2>
+            {contact.conversation_status ? (
+              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${CONVERSATION_STYLES[contact.conversation_status] ?? ""}`}>
+                {CONVERSATION_LABELS[contact.conversation_status] ?? contact.conversation_status}
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-2 text-sm text-slate-700">{contact.conversation_summary}</p>
+          {contact.summary_updated_at ? (
+            <p className="mt-2 text-xs text-slate-400">
+              Updated {new Date(contact.summary_updated_at).toLocaleString()}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {/* ── Special remarks ─────────────────────────────────── */}
+      <section className="mt-6">
+        <h2 className="text-sm font-medium text-slate-900">Special remarks</h2>
+        <p className="mt-1 text-xs text-slate-400">
+          Yours. Never written or overwritten by the model.
+        </p>
+        <form
+          action={async (formData: FormData) => {
+            "use server";
+            await saveRemarks(id, formData);
+          }}
+          className="mt-2"
+        >
+          <textarea
+            name="remarks"
+            rows={3}
+            defaultValue={contact.remarks ?? ""}
+            placeholder="Anything worth knowing before you reply — preferences, history, sensitivities."
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
+          />
+          <button
+            type="submit"
+            className="mt-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            Save remarks
+          </button>
+        </form>
+      </section>
 
       {/* ── Company ─────────────────────────────────────────── */}
       <section className="mt-8">
@@ -160,55 +212,114 @@ export default async function ContactPage({
         )}
       </section>
 
-      {/* ── Enquiries ───────────────────────────────────────── */}
+      {/* ── Conversation timeline ───────────────────────────── */}
       <section className="mt-8">
-        <h2 className="text-sm font-medium text-slate-900">Enquiries</h2>
-        <ul className="mt-2 space-y-3">
-          {enquiries.map((enquiry) => (
-            <li key={enquiry.id} className="rounded-lg border border-slate-200 p-4">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="font-medium text-slate-900">{enquiry.subject || "(no subject)"}</p>
-                <span className="flex shrink-0 items-center gap-2">
-                  {enquiry.priority ? (
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium uppercase tracking-wide ring-1 ${PRIORITY_STYLES[enquiry.priority]}`}>
-                      {enquiry.priority}
-                    </span>
-                  ) : null}
-                  <time className="text-xs tabular-nums text-slate-400">
-                    {new Date(enquiry.received_at).toLocaleDateString()}
-                  </time>
-                </span>
-              </div>
+        <h2 className="text-sm font-medium text-slate-900">Conversation</h2>
+        <p className="mt-1 text-xs text-slate-400">
+          Oldest first. Both directions.
+        </p>
 
-              {enquiry.priority_reasoning ? (
-                <div className="mt-2 border-l-2 border-slate-200 pl-3">
-                  <p className="text-sm text-slate-700">{enquiry.priority_reasoning}</p>
-                  {enquiry.priority_signals?.length ? (
-                    <ul className="mt-2 flex flex-wrap gap-1.5">
-                      {enquiry.priority_signals.map((s, i) => (
-                        <li key={i} className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{s}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  {enquiry.respond_by ? (
-                    <p className="mt-2 text-xs text-slate-500">
-                      Respond by: <span className="text-slate-700">{enquiry.respond_by}</span>
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
+        <ol className="mt-3 space-y-3 border-l border-slate-200 pl-4">
+          {[...enquiries]
+            .sort((a, b) => +new Date(a.received_at) - +new Date(b.received_at))
+            .map((message) => {
+              const outbound = message.direction === "outbound";
+              return (
+                <li key={message.id} className="relative">
+                  <span
+                    className={`absolute -left-[21px] top-2 h-2 w-2 rounded-full ${
+                      outbound ? "bg-slate-300" : "bg-slate-900"
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <div className={`rounded-lg border p-4 ${outbound ? "border-slate-200 bg-slate-50" : "border-slate-200"}`}>
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="font-medium text-slate-900">
+                        <span className={`mr-2 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${outbound ? "bg-slate-200 text-slate-600" : "bg-slate-900 text-white"}`}>
+                          {outbound ? "We replied" : "They wrote"}
+                        </span>
+                        {message.subject || "(no subject)"}
+                      </p>
+                      <span className="flex shrink-0 items-center gap-2">
+                        {!outbound && message.priority ? (
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium uppercase tracking-wide ring-1 ${PRIORITY_STYLES[message.priority]}`}>
+                            {message.priority}
+                          </span>
+                        ) : null}
+                        <time className="text-xs tabular-nums text-slate-400">
+                          {new Date(message.received_at).toLocaleString(undefined, {
+                            day: "numeric", month: "short", year: "numeric",
+                            hour: "2-digit", minute: "2-digit",
+                          })}
+                        </time>
+                      </span>
+                    </div>
 
-              <details className="mt-3">
-                <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-900">
-                  Show message
-                </summary>
-                <pre className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-sans text-sm text-slate-700">
-                  {enquiry.body_plain || "(empty)"}
-                </pre>
-              </details>
-            </li>
-          ))}
-        </ul>
+                    {!outbound && message.priority_reasoning ? (
+                      <div className="mt-2 border-l-2 border-slate-200 pl-3">
+                        <p className="text-sm text-slate-700">{message.priority_reasoning}</p>
+                        {message.priority_signals?.length ? (
+                          <ul className="mt-2 flex flex-wrap gap-1.5">
+                            {message.priority_signals.map((sig, i) => (
+                              <li key={i} className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{sig}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        {message.respond_by ? (
+                          <p className="mt-2 text-xs text-slate-500">
+                            Respond by: <span className="text-slate-700">{message.respond_by}</span>
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    <details className="mt-3">
+                      <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-900">
+                        Show full message
+                      </summary>
+                      <pre className="mt-2 whitespace-pre-wrap rounded-lg bg-white p-3 font-sans text-sm text-slate-700 ring-1 ring-slate-200">
+                        {message.body_plain || "(empty)"}
+                      </pre>
+                    </details>
+                  </div>
+                </li>
+              );
+            })}
+        </ol>
+
+        {/* Logging a reply keeps the record honest about whose turn it is.
+            Replies also arrive automatically if the intake address is BCC'd
+            and OWNER_EMAILS is configured. */}
+        <form
+          action={async (formData: FormData) => {
+            "use server";
+            await logReply(id, formData);
+          }}
+          className="mt-4 rounded-lg border border-dashed border-slate-300 p-4"
+        >
+          <h3 className="text-sm font-medium text-slate-900">Log a reply you sent</h3>
+          <input
+            name="subject"
+            placeholder="Subject"
+            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
+          />
+          <textarea
+            name="body"
+            rows={3}
+            required
+            placeholder="What you sent them."
+            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
+          />
+          <button
+            type="submit"
+            className="mt-2 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+          >
+            Log reply
+          </button>
+          <span className="ml-3 text-xs text-slate-400">
+            Re-reads the thread and updates the status. Counts against the daily cap.
+          </span>
+        </form>
       </section>
 
       <form

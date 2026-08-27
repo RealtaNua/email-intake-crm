@@ -62,3 +62,54 @@ export async function reprocessEnquiry(enquiryId: string) {
   revalidatePath(`/dashboard/${enquiryId}`);
   revalidatePath("/dashboard");
 }
+
+/** Record a reply we sent, so the thread shows both sides. */
+export async function logReply(contactId: string, formData: FormData) {
+  const supabase = await createServerSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const body = String(formData.get("body") ?? "").trim();
+  const subject = String(formData.get("subject") ?? "").trim() || "(reply)";
+  if (!body) return;
+
+  const admin = createAdminClient();
+  const { data: contact } = await admin
+    .from("contacts").select("email").eq("id", contactId).single();
+  if (!contact) throw new Error("Contact not found");
+
+  const { data: reply } = await admin
+    .from("enquiries")
+    .insert({
+      contact_id: contactId,
+      direction: "outbound",
+      sender_email: user.email ?? "me",
+      sender_name: "Me",
+      recipient: contact.email,
+      subject,
+      body_plain: body,
+      classification_status: "pending",
+    })
+    .select("id")
+    .single();
+
+  // Re-read the thread so the conversation summary and status reflect the
+  // reply. Without this the record still says they are waiting on us.
+  if (reply) await classifyEnquiry(reply.id);
+
+  revalidatePath(`/dashboard/${contactId}`);
+  revalidatePath("/dashboard");
+}
+
+/** Free-text remarks. Human-written, never touched by the model. */
+export async function saveRemarks(contactId: string, formData: FormData) {
+  const supabase = await createServerSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const remarks = String(formData.get("remarks") ?? "");
+  const admin = createAdminClient();
+  await admin.from("contacts").update({ remarks }).eq("id", contactId);
+
+  revalidatePath(`/dashboard/${contactId}`);
+}

@@ -17,7 +17,9 @@ type ContactJoin = {
 
 const CLASSIFY_TOOL: Anthropic.Tool = {
   name: "record_priority",
-  description: "Record the triage decision for this enquiry. Call exactly once.",
+  description:
+    "Record the triage decision for this message and the state of the whole " +
+    "conversation with this contact. Call exactly once.",
   strict: true,
   input_schema: {
     type: "object",
@@ -44,8 +46,31 @@ const CLASSIFY_TOOL: Anthropic.Tool = {
         type: "string",
         description: "Plain-language target, e.g. 'today', 'within 2 working days', 'no deadline'.",
       },
+      conversation_summary: {
+        type: "string",
+        description:
+          "Two or three sentences covering the whole thread with this contact, both directions: " +
+          "what they want, what has been said back, and where it now stands. Write it so someone " +
+          "picking this up cold knows what to do next without reading the emails.",
+      },
+      conversation_status: {
+        type: "string",
+        enum: [
+          "awaiting_our_reply",
+          "awaiting_their_reply",
+          "scheduled",
+          "closed_won",
+          "closed_lost",
+          "no_action_needed",
+        ],
+        description:
+          "Whose court the ball is in. awaiting_our_reply means they are waiting on us.",
+      },
     },
-    required: ["priority", "reasoning", "signals", "respond_by"],
+    required: [
+      "priority", "reasoning", "signals", "respond_by",
+      "conversation_summary", "conversation_status",
+    ],
   },
 };
 
@@ -68,6 +93,8 @@ HOW TO JUDGE
   and you should say so in your reasoning.
 - If the sender used a personal email address and no company profile exists, do not
   penalise them for it — judge the message on its own terms.
+- The thread is given to you in full, both directions. If we have already replied and
+  they have not come back, that is not urgent no matter how good the opportunity is.
 - Be willing to rate things low. A triage system that marks everything high is useless.
 - Your reasoning is read by a human deciding what to do next. Make it specific and
   honest, including when you are uncertain.
@@ -87,7 +114,7 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
   const { data: enquiry, error: readError } = await supabase
     .from("enquiries")
     .select(
-      "id, sender_email, sender_name, sender_domain, subject, body_plain, classification_status, contacts ( id, name, company_id, status, total_received, notes, companies ( domain, profile ) )",
+      "id, contact_id, sender_email, sender_name, sender_domain, subject, body_plain, classification_status, contacts ( id, name, company_id, status, total_received, notes, companies ( domain, profile ) )",
     )
     .eq("id", enquiryId)
     .single();
@@ -104,6 +131,23 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
   const setStatus = async (fields: Record<string, unknown>) => {
     await supabase.from("enquiries").update(fields).eq("id", enquiryId);
   };
+
+  // The whole thread, both directions, oldest first. Without the outbound
+  // side the model cannot tell whether someone is waiting on us or we are
+  // waiting on them, which is the question the status is meant to answer.
+  const { data: thread } = await supabase
+    .from("enquiries")
+    .select("direction, subject, body_plain, received_at")
+    .eq("contact_id", (enquiry as unknown as { contact_id: string }).contact_id ?? "")
+    .order("received_at", { ascending: true });
+
+  const threadSection = (thread ?? [])
+    .map((m) =>
+      `[${m.direction === "outbound" ? "WE REPLIED" : "THEY WROTE"} · ` +
+      `${new Date(m.received_at).toLocaleDateString()}] ${m.subject ?? "(no subject)"}\n` +
+      `${(m.body_plain ?? "").slice(0, 1200)}`,
+    )
+    .join("\n\n---\n\n");
 
   if (!(await claimClaudeCall())) {
     console.warn("[classify] daily cap reached, skipping", enquiryId);
@@ -174,7 +218,8 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
             `Domain: ${enquiry.sender_domain ?? "unknown"}\n` +
             `Subject: ${enquiry.subject ?? "(no subject)"}\n\n` +
             `${(enquiry.body_plain ?? "(empty body)").slice(0, 4000)}\n\n` +
-            `${profileSection}\n\n${relationshipSection}${companySection}`,
+            `${profileSection}\n\n${relationshipSection}${companySection}\n\n` +
+            `FULL THREAD WITH THIS CONTACT (oldest first)\n${threadSection}`,
         },
       ],
       tools: [CLASSIFY_TOOL],
@@ -197,7 +242,22 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
       reasoning: string;
       signals: string[];
       respond_by: string;
+      conversation_summary: string;
+      conversation_status: string;
     };
+
+    // Conversation state belongs to the relationship, not to one message.
+    const contactId = (enquiry as unknown as { contact_id: string | null }).contact_id;
+    if (contactId) {
+      await supabase
+        .from("contacts")
+        .update({
+          conversation_summary: decision.conversation_summary,
+          conversation_status: decision.conversation_status,
+          summary_updated_at: new Date().toISOString(),
+        })
+        .eq("id", contactId);
+    }
 
     await setStatus({
       priority: decision.priority,

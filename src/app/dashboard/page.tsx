@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { PRIORITY_STYLES, timeAgo, topPriority, type ContactWithRelations } from "@/lib/types";
+import {
+  PRIORITY_STYLES, CONVERSATION_LABELS, CONVERSATION_STYLES,
+  timeAgo, topPriority, type ContactWithRelations,
+} from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +17,7 @@ export default async function DashboardPage() {
   // why this reads from contacts rather than from the message log.
   const { data, error } = await supabase
     .from("contacts")
-    .select("*, companies ( domain, profile, enrichment_status ), enquiries ( id, subject, priority, received_at )")
+    .select("*, companies ( domain, profile, enrichment_status ), enquiries ( id, subject, priority, received_at, direction, body_plain )")
     .order("last_seen_at", { ascending: false })
     .limit(100);
 
@@ -80,6 +83,11 @@ export default async function DashboardPage() {
                     {contact.name || contact.email}
                   </Link>
                   <span className="flex shrink-0 items-center gap-2">
+                    {contact.conversation_status ? (
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${CONVERSATION_STYLES[contact.conversation_status] ?? ""}`}>
+                        {CONVERSATION_LABELS[contact.conversation_status] ?? contact.conversation_status}
+                      </span>
+                    ) : null}
                     {priority ? (
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium uppercase tracking-wide ring-1 ${PRIORITY_STYLES[priority]}`}>
                         {priority}
@@ -112,9 +120,55 @@ export default async function DashboardPage() {
                   <p className="mt-2 text-xs text-slate-400">Personal email domain</p>
                 )}
 
+                {contact.conversation_summary ? (
+                  <p className="mt-3 border-l-2 border-slate-200 pl-3 text-sm text-slate-600">
+                    {contact.conversation_summary}
+                  </p>
+                ) : null}
+
+                {/* The messages themselves, newest first, each expandable.
+                    A count alone tells you nothing about what was said. */}
+                <ul className="mt-3 divide-y divide-slate-100 border-t border-slate-100">
+                  {[...(contact.enquiries ?? [])]
+                    .sort((a, b) => +new Date(b.received_at) - +new Date(a.received_at))
+                    .map((message) => (
+                      <li key={message.id} className="py-2">
+                        <details>
+                          <summary className="flex cursor-pointer flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-sm hover:text-slate-900">
+                            <span className="text-slate-700">
+                              <span
+                                className={`mr-2 rounded px-1 py-0.5 text-[10px] font-medium uppercase ${
+                                  message.direction === "outbound"
+                                    ? "bg-slate-200 text-slate-600"
+                                    : "bg-slate-100 text-slate-500"
+                                }`}
+                              >
+                                {message.direction === "outbound" ? "Sent" : "Received"}
+                              </span>
+                              {message.subject || "(no subject)"}
+                            </span>
+                            <span className="shrink-0 text-xs tabular-nums text-slate-400">
+                              {new Date(message.received_at).toLocaleDateString(undefined, {
+                                day: "numeric", month: "short", year: "numeric",
+                              })}
+                            </span>
+                          </summary>
+                          <pre className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-sans text-sm text-slate-700">
+                            {message.body_plain || "(empty)"}
+                          </pre>
+                        </details>
+                      </li>
+                    ))}
+                </ul>
+
                 <p className="mt-3 text-xs text-slate-500">
-                  {count} {count === 1 ? "enquiry" : "enquiries"}
+                  {count} {count === 1 ? "message" : "messages"}
                   {contact.notes?.length ? ` · ${contact.notes.length} note${contact.notes.length === 1 ? "" : "s"}` : ""}
+                  {contact.remarks ? " · has remarks" : ""}
+                  {" · "}
+                  <Link href={`/dashboard/${contact.id}`} className="text-slate-600 hover:underline">
+                    Open record
+                  </Link>
                 </p>
               </li>
             );

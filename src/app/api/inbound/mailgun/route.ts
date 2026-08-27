@@ -75,6 +75,49 @@ export async function POST(request: Request) {
 
   const supabase = createAdminClient();
 
+  // If we BCC'd ourselves on a reply, this is our own outbound message, not a
+  // new enquiry. Attach it to the contact it was addressed TO so the thread
+  // shows both sides. Requires OWNER_EMAILS to be set; without it the feature
+  // is simply off and replies are logged manually instead.
+  const owners = (process.env.OWNER_EMAILS ?? "")
+    .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  const isOwnReply = owners.includes(senderEmail);
+
+  if (isOwnReply) {
+    const toHeader = field("To") ?? field("recipient") ?? "";
+    const toEmail = parseFromHeader(toHeader).email;
+    if (toEmail) {
+      const { data: existing } = await createAdminClient()
+        .from("contacts").select("id").eq("email", toEmail).maybeSingle();
+      if (existing) {
+        const admin = createAdminClient();
+        const { data: reply, error: replyError } = await admin
+          .from("enquiries")
+          .insert({
+            contact_id: existing.id,
+            direction: "outbound",
+            message_id: field("Message-Id") ?? field("message-id"),
+            sender_email: senderEmail,
+            sender_name: parsed.name,
+            recipient: toEmail,
+            subject: field("subject"),
+            body_plain: field("stripped-text") ?? field("body-plain"),
+            body_html: field("body-html"),
+            raw_payload: rawPayload,
+          })
+          .select("id")
+          .single();
+
+        if (replyError?.code === "23505") {
+          return NextResponse.json({ ok: true, duplicate: true }, { status: 200 });
+        }
+        console.log("[inbound] stored our own reply to", toEmail);
+        if (reply) after(async () => { await classifyEnquiry(reply.id); });
+        return NextResponse.json({ ok: true, id: reply?.id, direction: "outbound" }, { status: 200 });
+      }
+    }
+  }
+
   // Resolve the company and contact this email belongs to before storing the
   // message. The relationship is the durable thing; the email is an event
   // against it.

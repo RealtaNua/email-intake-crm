@@ -96,8 +96,12 @@ companies  (one per domain)   profile, enrichment_status
     ^
 contacts   (one per sender)   name, status, notes[], total_received
     ^
-enquiries  (one per email)    subject, body, priority, priority_reasoning
+enquiries  (one per MESSAGE)  direction, subject, body, priority, reasoning
 ```
+
+Messages carry `direction` — `inbound` or `outbound` — so the record shows both
+sides. Outbound rows arrive two ways: the "Log a reply" form, or automatically if
+the intake address is BCC'd and `OWNER_EMAILS` is set (unset = feature off).
 
 **Contacts are the unit of the CRM.** The dashboard lists contacts, not emails.
 
@@ -110,6 +114,13 @@ enquiries  (one per email)    subject, body, priority, priority_reasoning
   a standing property of a person.
 - **Personal domains get no company row at all.** A "Gmail Inc." record would be
   worse than none.
+- **Conversation state lives on the contact** — `conversation_summary` and
+  `conversation_status` are produced by the *same* Claude call as classification,
+  not a second one. The model already has the thread in context.
+- **`remarks` is human-only.** The model never writes or overwrites it. `notes` is
+  the model-writable field.
+- **Classification receives the whole thread, both directions.** Without the
+  outbound side it cannot tell whether someone is waiting on us or we on them.
 - **Classification receives the whole relationship**: company profile, this contact's
   notes and payment history, *and* other contacts at the same company with their
   enquiry history. Without that last part the model asserted "we have no record of
