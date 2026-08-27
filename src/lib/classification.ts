@@ -12,6 +12,7 @@ type ContactJoin = {
   total_received: number;
   notes: { text: string }[] | null;
   companies: { domain: string; profile: unknown } | null;
+  company_id?: string | null;
 };
 
 const CLASSIFY_TOOL: Anthropic.Tool = {
@@ -57,6 +58,9 @@ HOW TO JUDGE
   "urgent" in an email means very little; a stated budget and a fixed date mean a lot.
 - A polite, unhurried email from a government agency with a real budget outranks an
   agitated email from someone selling software.
+- Check the company history before claiming anything is unknown. If a colleague has
+  written before, that is prior contact with the organisation even if this individual
+  is new, and a message referencing "the proposal" is probably referencing theirs.
 - An existing relationship changes everything. Someone already recorded as a paying
   client, or with notes on file, is not a cold enquiry — say so in your reasoning.
 - Use the company profile when one is supplied. A large regional employer with a
@@ -83,7 +87,7 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
   const { data: enquiry, error: readError } = await supabase
     .from("enquiries")
     .select(
-      "id, sender_email, sender_name, sender_domain, subject, body_plain, classification_status, contacts ( id, name, status, total_received, notes, companies ( domain, profile ) )",
+      "id, sender_email, sender_name, sender_domain, subject, body_plain, classification_status, contacts ( id, name, company_id, status, total_received, notes, companies ( domain, profile ) )",
     )
     .eq("id", enquiryId)
     .single();
@@ -129,6 +133,33 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
           : `No notes on file.`)
       : `No contact record.`;
 
+    // Company-level history. Without this the model can assert "we have no
+    // record of this company" while a colleague's enquiry sits in the same
+    // database — a confident claim our own data contradicts, which is worse
+    // than saying nothing.
+    let companySection = "";
+    if (contact?.companies) {
+      const { data: colleagues } = await supabase
+        .from("contacts")
+        .select("name, email, status, total_received, enquiries ( subject, received_at, priority )")
+        .eq("company_id", (contact as unknown as { company_id: string }).company_id ?? "")
+        .neq("id", contact.id);
+
+      if (colleagues?.length) {
+        companySection =
+          `\n\nOTHERS AT THIS COMPANY ALREADY IN THE CRM\n` +
+          colleagues
+            .map((c) => {
+              const history = (c.enquiries ?? [])
+                .map((e) => `    - "${e.subject}" (${new Date(e.received_at).toLocaleDateString()}${e.priority ? `, rated ${e.priority}` : ""})`)
+                .join("\n");
+              return `  ${c.name ?? c.email} <${c.email}> — status ${c.status}` +
+                (history ? `\n${history}` : "");
+            })
+            .join("\n");
+      }
+    }
+
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 2000,
@@ -143,7 +174,7 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
             `Domain: ${enquiry.sender_domain ?? "unknown"}\n` +
             `Subject: ${enquiry.subject ?? "(no subject)"}\n\n` +
             `${(enquiry.body_plain ?? "(empty body)").slice(0, 4000)}\n\n` +
-            `${profileSection}\n\n${relationshipSection}`,
+            `${profileSection}\n\n${relationshipSection}${companySection}`,
         },
       ],
       tools: [CLASSIFY_TOOL],

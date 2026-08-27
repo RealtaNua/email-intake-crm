@@ -33,7 +33,8 @@ only build item remaining.** 18 commits.
 - [x] 4. Company-domain enrichment (Claude + web search)
 - [x] 5. Priority classification with reasoning (Claude)
 - [x] 6. Supabase Auth — Google + email/password, sign-up and sign-in both verified
-- [x] 7. Per-enquiry detail view, sender history, reprocess action
+- [x] 7. Contact detail view, company grouping, reprocess action
+- [x] 7b. **Restructured from an email log into a real CRM** (migration 0005)
 - [ ] 8. **Chat-based record updates — NEXT**
 - [x] 9. Rate limit / daily cap — pulled forward into step 4
 
@@ -61,15 +62,16 @@ src/
     login/page.tsx            Google + email/password (sign-up and sign-in)
     auth/callback/route.ts    OAuth / confirmation code exchange
     auth/signout/route.ts     POST -> sign out -> /login
-    dashboard/page.tsx        Enquiry list
-    dashboard/[id]/page.tsx   Detail: message, profile, reasoning, history
-    dashboard/actions.ts      Server action: reprocessEnquiry()
+    dashboard/page.tsx        Contact list (the CRM view)
+    dashboard/[id]/page.tsx   Contact record: company, notes, all their enquiries
+    dashboard/actions.ts      Server actions: reprocessContact(), reprocessEnquiry()
     api/inbound/mailgun/      Inbound webhook (verify -> insert -> 200 -> after())
   lib/
     env.ts                    requireEnv() — SERVER ONLY, see gotcha below
     mailgun.ts                HMAC signature verification, From header parsing
     claude.ts                 Client, MODEL, daily cap claim, token accounting
-    enrichment.ts             Company research via web search -> company_profile
+    enrichment.ts             enrichCompany(id) — research per DOMAIN, done once
+    contacts.ts               resolveContact() — upsert company + contact per email
     classification.ts         Priority + reasoning -> priority, priority_reasoning
     business-context.ts       EDITABLE business rules driving triage judgment
     personal-domains.ts       gmail.com etc — skip enrichment entirely
@@ -83,7 +85,35 @@ supabase/migrations/
   0002_add_enrichment.sql     company_profile, claude_usage ledger, atomic cap fn
   0003_add_classification.sql priority, reasoning, signals, respond_by
   0004_rls_policies.sql       select/update for authenticated; no insert/delete
+  0005_contacts_and_companies.sql
+                              companies <- contacts <- enquiries, with backfill
 ```
+
+## Data model — read this before touching queries
+
+```
+companies  (one per domain)   profile, enrichment_status
+    ^
+contacts   (one per sender)   name, status, notes[], total_received
+    ^
+enquiries  (one per email)    subject, body, priority, priority_reasoning
+```
+
+**Contacts are the unit of the CRM.** The dashboard lists contacts, not emails.
+
+- **Company research is per domain and runs once.** A second person emailing from
+  an already-researched employer costs nothing extra. Verified: a colleague at
+  `grabtaxi.com` produced one Claude call (classification), not two.
+- **Durable facts belong on the contact** — status, notes, total received. This is
+  where the step 8 chat interface writes.
+- **Priority stays on the enquiry.** It is a judgement about a specific message, not
+  a standing property of a person.
+- **Personal domains get no company row at all.** A "Gmail Inc." record would be
+  worse than none.
+- **Classification receives the whole relationship**: company profile, this contact's
+  notes and payment history, *and* other contacts at the same company with their
+  enquiry history. Without that last part the model asserted "we have no record of
+  this company" while a colleague's enquiry sat in the same database.
 
 Dependencies: `next`, `react`, `@anthropic-ai/sdk`, `@supabase/supabase-js`,
 `@supabase/ssr`.
@@ -169,6 +199,9 @@ observation. Consult the authority — Mailgun's event stream, the token ledger,
 8. **Sender history is split** into same-address ("this person") and same-domain
    ("others at this company"). Merging them would imply a relationship with someone
    who has never written.
+9. **Never let the model claim something is unknown when the database knows it.**
+   Any context the CRM holds and the prompt omits will eventually surface as a
+   confident false statement in reasoning the owner is showing to someone.
 
 ---
 
@@ -178,10 +211,16 @@ A chat interface on each enquiry where plain language updates the **structured
 record**, not a text blob. "Received $500 from this client last week" should write
 to real columns.
 
-Approach: Claude tool-use against a defined schema of allowed operations
-(e.g. `add_note`, `record_payment`, `set_status`). **Propose the field schema before
-building** — which fields the chat may write is a design decision, not an
-implementation detail.
+Approach: Claude tool-use against a defined schema of allowed operations. The
+target columns already exist on `contacts` from migration 0005:
+
+- `notes` — append-only array of `{text, created_at, source}`
+- `total_received` — numeric
+- `status` — new | active | client | archived
+
+**Propose the field schema before building** — which fields the chat may write is a
+design decision, not an implementation detail. The chat attaches to the *contact*,
+not to an individual enquiry.
 
 It is last in the order because it benefits from real data to test against, and it
 is the most open-ended piece.
