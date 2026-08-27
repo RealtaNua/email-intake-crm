@@ -153,8 +153,9 @@ showed `accepted → accepted → delivered 200 OK`) rather than infer from an a
 - **Priority quality depends on `src/lib/business-context.ts`.** That file describes what
   a valuable enquiry looks like for this specific business. It is the difference between
   real triage and a keyword rule, and it should be edited to match reality.
-- **Deploys are manual** (`vercel deploy --prod`). The GitHub repo is not yet connected
-  to the Vercel project for automatic deploys on push.
+- **Every push to `main` deploys to production.** The GitHub repo is connected to the
+  Vercel project, so a broken commit goes live. `npm run build` passing locally is the
+  gate before each commit.
 
 ## Local development
 
