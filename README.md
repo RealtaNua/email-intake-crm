@@ -150,9 +150,10 @@ showed `accepted → accepted → delivered 200 OK`) rather than infer from an a
   statement and fails closed. Measured cost is roughly \$0.15-0.25 per enriched enquiry
   at medium effort; a full-effort run measured \$0.54, almost entirely from web search
   results being fed back into context.
-- **Email confirmation is disabled.** Sign-up logs the user straight in. The
-  correct fix is custom SMTP (Mailgun) configured in Supabase Auth settings;
-  the built-in email service is not usable for this.
+- **Email confirmation is enabled and uses Supabase's built-in email service.**
+  Delivery works but is slow (measured: ~3 minutes) and the free tier allows
+  only a few messages per hour, so repeated sign-up testing will hit the limit.
+  Custom SMTP via Mailgun is the proper fix and remains outstanding.
 - **Priority quality depends on `src/lib/business-context.ts`.** That file describes what
   a valuable enquiry looks like for this specific business. It is the difference between
   real triage and a keyword rule, and it should be edited to match reality.
@@ -194,14 +195,28 @@ an empty `identities` array.
 
 **Fix:** both cases now produce an explicit message.
 
-### 10. Confirmation emails never arrived
+### 10. Confirmation email "never arrived" — it was just slow
 
-**Cause:** not a misconfiguration. Supabase's built-in email service is
-rate-limited to a few messages per hour on the free tier and is explicitly not
-intended for production use.
+Sign-up appeared to send no confirmation email. Sign-in correctly reported the
+account as unconfirmed, and I concluded delivery had failed, citing Supabase's
+built-in email service being rate-limited and unsuitable for production.
 
-**Fix:** email confirmation disabled for the demo. Custom SMTP via Mailgun is
-the proper fix and is listed under known limitations.
+**Cause:** none. The email arrived roughly three minutes after sign-up and the
+account confirmed normally. The built-in service is genuinely slow and does
+carry a low hourly limit, but it was working the entire time.
+
+**This is the fourth time in this build I read latency as failure** — the first
+test email, the first enrichment run, two deployment checks, and this. Each
+time an empty result at one point in time was treated as a permanent state.
+
+**What actually distinguishes the two:** an authoritative log. Mailgun's event
+stream showed `accepted -> delivered 200 OK`. Supabase's admin users endpoint
+showed `email_confirmed_at`. Both answered definitively in one call. Polling a
+result and reasoning from its absence never can, because "not yet" and "never"
+are the same observation.
+
+**Practical fix adopted:** wait on a completion signal rather than polling and
+interpreting silence, and check the system of record before declaring failure.
 
 ## Local development
 
