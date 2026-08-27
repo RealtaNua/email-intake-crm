@@ -193,7 +193,20 @@ wrong wall-clock time to every reader. Use `<LocalTime>` from
 on the server *and* on the first client render (so hydration cannot mismatch), then
 swaps to the reader's local time in an effect.
 
-**9. Do not diagnose from an absence.** Four times in this build, in-flight work was
+**9. Put the thing being processed LAST in the prompt, and delimit it.** With the
+target message at the top and a long context block after it, the model summarised
+the *newest thread message* instead of the target — and twice emitted the literal
+string "placeholder" in a required field. Background first, then a delimited
+`THE MESSAGE YOU ARE PROCESSING` block, then the instruction.
+
+**10. Never judge a past message with future context.** Classification includes the
+thread only up to and including the message being processed (`.lte(received_at)`).
+Including later messages meant reprocessing re-rated history with hindsight and
+collapsed every old rating to "normal", because read today the matter is handled.
+Contact-level state (`next_step`, `conversation_status`) is written only when the
+message being processed is the most recent one.
+
+**11. Do not diagnose from an absence.** Four times in this build, in-flight work was
 declared broken because a check ran too early. "Not yet" and "never" are the same
 observation. Consult the authority — Mailgun's event stream, the token ledger,
 `email_confirmed_at` — rather than polling and inferring.
@@ -224,7 +237,7 @@ observation. Consult the authority — Mailgun's event stream, the token ledger,
 8. **Sender history is split** into same-address ("this person") and same-domain
    ("others at this company"). Merging them would imply a relationship with someone
    who has never written.
-10. **Never let the model claim something is unknown when the database knows it.**
+11. **Never let the model claim something is unknown when the database knows it.**
    Any context the CRM holds and the prompt omits will eventually surface as a
    confident false statement in reasoning the owner is showing to someone.
 
@@ -261,6 +274,16 @@ is the most open-ended piece.
 - Any third-party CRM integration. The CRM *is* this app's Supabase-backed dashboard.
 
 ---
+
+## Ops
+
+```bash
+npx tsx scripts/reprocess.ts <email>   # re-run research + triage for one contact
+npx tsx scripts/reprocess.ts --all     # everyone; costs one Claude call per message
+```
+
+The dashboard button does the same thing but needs a logged-in session. The script
+is for backfilling after a schema change.
 
 ## Environment
 

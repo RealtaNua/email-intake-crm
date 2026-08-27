@@ -142,6 +142,9 @@ HOW TO JUDGE
 - Your reasoning is read by a human deciding what to do next. Make it specific and
   honest, including when you are uncertain.
 
+Every field you return must be real. If you cannot say something useful, say so plainly —
+never emit filler like "placeholder", "n/a" or "TBD".
+
 Finish by calling record_priority exactly once.`;
 
 const REPLY_SYSTEM = `You maintain the conversation record for the business described below.
@@ -149,6 +152,8 @@ const REPLY_SYSTEM = `You maintain the conversation record for the business desc
 The message you are given is one WE sent. Do not rate it — summarise what we said in
 one sentence for the timeline, then say whose court the ball is now in and what the
 next action is.
+
+Every field you return must be real — never filler like "placeholder" or "n/a".
 
 Finish by calling record_reply exactly once.`;
 
@@ -165,7 +170,7 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
   const { data: enquiry, error: readError } = await supabase
     .from("enquiries")
     .select(
-      "id, contact_id, direction, sender_email, sender_name, sender_domain, subject, body_plain, classification_status, contacts ( id, name, company_id, status, total_received, notes, companies ( domain, profile ) )",
+      "id, contact_id, direction, received_at, sender_email, sender_name, sender_domain, subject, body_plain, classification_status, contacts ( id, name, company_id, status, total_received, notes, companies ( domain, profile ) )",
     )
     .eq("id", enquiryId)
     .single();
@@ -183,22 +188,42 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
     await supabase.from("enquiries").update(fields).eq("id", enquiryId);
   };
 
-  // The whole thread, both directions, oldest first. Without the outbound
-  // side the model cannot tell whether someone is waiting on us or we are
-  // waiting on them, which is the question the status is meant to answer.
+  // The thread up to AND INCLUDING this message — never past it.
+  //
+  // Reprocessing an old message with the whole thread meant judging it with
+  // hindsight: every historical rating collapsed to "normal" because, read
+  // today, the matter is already handled. A message's priority should reflect
+  // what was known when it arrived.
+  const targetReceivedAt = (enquiry as unknown as { received_at: string }).received_at;
   const { data: thread } = await supabase
     .from("enquiries")
-    .select("direction, subject, body_plain, received_at")
+    .select("id, direction, subject, body_plain, received_at")
     .eq("contact_id", (enquiry as unknown as { contact_id: string }).contact_id ?? "")
+    .lte("received_at", targetReceivedAt)
     .order("received_at", { ascending: true });
 
-  const threadSection = (thread ?? [])
-    .map((m) =>
-      `[${m.direction === "outbound" ? "WE REPLIED" : "THEY WROTE"} · ` +
-      `${new Date(m.received_at).toLocaleDateString()}] ${m.subject ?? "(no subject)"}\n` +
-      `${(m.body_plain ?? "").slice(0, 1200)}`,
-    )
-    .join("\n\n---\n\n");
+  const priorMessages = (thread ?? []).filter((m) => m.id !== enquiryId);
+  const threadSection = priorMessages.length
+    ? priorMessages
+        .map((m) =>
+          `[${m.direction === "outbound" ? "WE REPLIED" : "THEY WROTE"} · ` +
+          `${new Date(m.received_at).toLocaleDateString()}] ${m.subject ?? "(no subject)"}\n` +
+          `${(m.body_plain ?? "").slice(0, 1200)}`,
+        )
+        .join("\n\n---\n\n")
+    : "(nothing — this is the first message)";
+
+  // Contact-level state describes the conversation NOW, so only the most
+  // recent message is allowed to write it. Otherwise reprocessing an old
+  // message rewinds the status to what it was months ago.
+  const { data: latest } = await supabase
+    .from("enquiries")
+    .select("id")
+    .eq("contact_id", (enquiry as unknown as { contact_id: string }).contact_id ?? "")
+    .order("received_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const isLatestMessage = latest?.id === enquiryId;
 
   if (!(await claimClaudeCall())) {
     console.warn("[classify] daily cap reached, skipping", enquiryId);
@@ -267,13 +292,16 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
         {
           role: "user",
           content:
-            `ENQUIRY\n` +
-            `From: ${enquiry.sender_name ?? "(no name)"} <${enquiry.sender_email}>\n` +
-            `Domain: ${enquiry.sender_domain ?? "unknown"}\n` +
-            `Subject: ${enquiry.subject ?? "(no subject)"}\n\n` +
-            `${(enquiry.body_plain ?? "(empty body)").slice(0, 4000)}\n\n` +
             `${profileSection}\n\n${relationshipSection}${companySection}\n\n` +
-            `FULL THREAD WITH THIS CONTACT (oldest first)\n${threadSection}`,
+            `EARLIER MESSAGES IN THIS THREAD (oldest first, background only)\n${threadSection}\n\n` +
+            `================ THE MESSAGE YOU ARE PROCESSING ================\n` +
+            `Direction: ${isOutbound ? "WE SENT THIS" : "THEY SENT THIS TO US"}\n` +
+            `From: ${enquiry.sender_name ?? "(no name)"} <${enquiry.sender_email}>\n` +
+            `Subject: ${enquiry.subject ?? "(no subject)"}\n\n` +
+            `${(enquiry.body_plain ?? "(empty body)").slice(0, 4000)}\n` +
+            `================ END OF THE MESSAGE ================\n\n` +
+            `Summarise THE MESSAGE ABOVE in one sentence — not the thread, and not ` +
+            `the most recent message. Everything before the delimiter is background.`,
         },
       ],
       tools: [isOutbound ? RECORD_REPLY_TOOL : CLASSIFY_TOOL],
@@ -304,7 +332,7 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
 
     // Conversation state belongs to the relationship, not to one message.
     const contactId = (enquiry as unknown as { contact_id: string | null }).contact_id;
-    if (contactId) {
+    if (contactId && isLatestMessage) {
       await supabase
         .from("contacts")
         .update({
