@@ -16,6 +16,10 @@ condition of debugging, and what matters is what corrects it.
 - [5. Sign-in silently did nothing](#5-sign-in-silently-did-nothing)
 - [6. The test email that "never arrived"](#6-the-test-email-that-never-arrived)
 - [7. The confirmation email that "never sent"](#7-the-confirmation-email-that-never-sent)
+- [8. Five emails, twenty API calls](#8-five-emails-twenty-api-calls)
+- [9. Summaries describing the wrong message](#9-summaries-describing-the-wrong-message)
+- [10. Every timestamp was in the wrong timezone](#10-every-timestamp-was-in-the-wrong-timezone)
+- [11. A dark-mode rule nobody had looked at](#11-a-dark-mode-rule-nobody-had-looked-at)
 - [What these have in common](#what-these-have-in-common)
 
 ---
@@ -288,6 +292,138 @@ looked broken too.
 **Lesson** — Waiting longer is a diagnostic step. When a system is known to be slow,
 elapsed time is part of the evidence, and "it hasn't happened yet" is not a finding.
 
+
+---
+
+## 8. Five emails, twenty API calls
+
+**Symptom** — Spotted by the owner reading the usage counter: *"why are there 20 calls
+when just 5 emails"*. Nothing had errored. The number was simply much larger than the
+work appeared to justify.
+
+**Cause** — Three compounding factors, none visible from the interface:
+
+1. The contact held **five** messages, not three — three inbound plus two replies
+   filed against it.
+2. A *reprocess* re-researches the company **and** re-classifies every message on the
+   contact. One reprocess of that contact was six calls, not one.
+3. It had been run **twice** — once producing broken output, once after the fix.
+
+Twelve of the twenty calls were debugging, not the pipeline doing its job.
+
+**The deeper problem** — the question could not be answered from the data. The usage
+table held a daily counter and nothing else, so it could say twenty calls had happened
+but not what any of them were. The honest answer at the time was "I can't tell you
+exactly."
+
+**Fix** — two changes, one behavioural and one structural:
+
+- A `claude_calls` table logging every call: purpose, which contact/company/message it
+  related to, token counts, and cost priced at the rates in force at the time.
+  Surfaced at `/dashboard/usage` with a breakdown by purpose.
+- Reprocessing now requires explicit permission for each run, and the script prints
+  the expected call count *before* spending it.
+
+**Lesson** — an aggregate counter enforces a budget but cannot explain one. If a
+number is going to be questioned, the data needed to answer the question has to be
+kept at the time, not reconstructed afterwards. And a cost that is invisible from the
+command that triggers it will eventually be spent by accident.
+
+---
+
+## 9. Summaries describing the wrong message
+
+**Symptom** — After a requested reprocess, the conversation timeline came back wrong
+in three ways at once: every priority had collapsed to "normal", several summaries
+described a different message than the one they were attached to, and two contained
+the literal string `"placeholder"`.
+
+**Cause** — Two independent faults that only appear once a thread has more than one
+message.
+
+*Wrong message.* The message being processed sat at the **top** of the prompt,
+followed by a large block of context — company profile, relationship, colleagues —
+ending with the full thread. The model anchored on the end of the prompt and
+summarised the newest thread message instead of the target. The `"placeholder"` values
+were it filling a required field it had no answer for.
+
+*Hindsight.* Classification loaded the entire thread, including messages that arrived
+**after** the one being processed. Read today, an urgent request that has since been
+handled looks routine — so every historical rating flattened.
+
+**Fix** —
+
+- Background first, then the target message inside an explicit
+  `THE MESSAGE YOU ARE PROCESSING` delimiter, then the instruction naming what to
+  summarise. Both system prompts now also forbid filler values outright.
+- The thread is truncated at the message being processed (`.lte(received_at)`), and
+  contact-level state is written only when processing the most recent message — so a
+  reprocess cannot rewind the conversation status.
+
+**Before:** 5 messages, all "normal", three summaries wrong, two "placeholder".
+**After:** high / urgent / reply / urgent / reply, each summary describing its own
+message, status correct with the next action named.
+
+**Lesson** — position in a prompt is not neutral. Instructions and the subject of
+those instructions belong at the end, past the context, and the subject needs a
+delimiter so "this one" is unambiguous. Separately: re-running an analysis over
+historical records will quietly rewrite history unless the inputs are pinned to what
+was knowable at the time.
+
+---
+
+## 10. Every timestamp was in the wrong timezone
+
+**Symptom** — Requested as a feature: show the time as well as the date, in the
+reader's timezone. Investigating it revealed the existing dates were already wrong.
+
+**Cause** — Timestamps were formatted inside **server components**. Server components
+render in the server's timezone — UTC on Vercel — so `toLocaleString()` there produces
+the server's wall-clock time for every reader regardless of where they are. Adding
+minutes would only have made the error more precise.
+
+**Why the obvious fix breaks something else** — moving formatting to the browser
+causes a hydration mismatch: the server emits one string, the client computes another,
+React warns and may keep the server's wrong value.
+
+**Fix** — a `LocalTime` component that renders a **timezone-independent UTC fallback
+on the server *and* on the first client render**, so hydration matches byte for byte,
+then applies the reader's local time in an effect. The `title` carries the full
+timestamp with the resolved zone name, so "which timezone is this?" is answerable by
+hovering.
+
+Verified the fallback is identical under `TZ=UTC`, `Asia/Singapore` and
+`America/New_York`, and that a message stored at `07:10Z` renders as `15:10` for a
+Singapore reader.
+
+**Lesson** — server-side rendering makes the server's locale and timezone leak into
+output that should be per-reader. Anything reader-relative — times, currency,
+collation — cannot be resolved during server rendering, and the fix has to preserve
+hydration equality rather than ignore it.
+
+---
+
+## 11. A dark-mode rule nobody had looked at
+
+**Symptom** — Found while restyling at the owner's request. Not reported, because the
+machine it was seen on was set to light mode.
+
+**Cause** — The project scaffold ships a `prefers-color-scheme: dark` block that
+switches the page background to near-black. Every component written since used
+explicit light colours. Anyone whose operating system was set to dark would have
+loaded the app and seen near-white text on near-white cards over a black page.
+
+The same stylesheet also hardcoded `font-family: Arial`, overriding the Geist font the
+layout was loading on every page — so the intended typeface had never once rendered.
+
+**Fix** — committed to a single light theme with named tokens, and removed the Arial
+override.
+
+**Lesson** — scaffold defaults are not neutral; they are decisions someone else made
+that stay in the codebase until read. A theming rule that only fires under a system
+setting the developer does not use will not surface through normal testing, and
+"works on my machine" is doing real work in that sentence.
+
 ---
 
 ## What these have in common
@@ -315,6 +451,12 @@ The practice adopted: wait on a completion signal rather than polling; check the
 system of record before declaring failure; and where no authority exists, report
 "no result yet" rather than "it failed".
 
+Entries 10 and 11 share a different shape: **a fault that cannot surface through the
+way you normally use the thing.** A timezone bug is invisible to a developer whose
+machine matches the server; a dark-mode bug is invisible to anyone testing in light
+mode. Neither would ever have been reported by a user who happened not to be affected.
+Both were found only because something adjacent was being changed.
+
 Three further patterns from the other entries:
 
 1. **Two unrelated things failing identically means the fault is in what they
@@ -329,3 +471,10 @@ Three further patterns from the other entries:
 3. **Silent failure costs more than loud failure.** The two most expensive bugs here
    — entries 4 and 5 — produced no error anywhere. Neither was complicated once
    visible.
+
+4. **Keep the data needed to answer the question you will be asked.** Entry 8 was
+   unanswerable not because the system was broken but because it recorded a total
+   instead of a record. Aggregates enforce; detail explains.
+
+5. **An analysis re-run over history will rewrite history** unless its inputs are
+   pinned to what was knowable at the time (entry 9).

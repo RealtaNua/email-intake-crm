@@ -29,17 +29,13 @@ The webhook stays thin on purpose. Mailgun retries any non-2xx response for hour
 two Claude calls would blow past its timeout — so the handler verifies, inserts, and
 returns 200. Enrichment happens off the request path.
 
-## Progress against the build order
+## Project status
 
-- [x] 1. Scaffold Next.js, connect Supabase + Vercel
-- [x] 2. Inbound webhook writing raw rows — **confirmed end to end with a real email**
-- [x] 3. Bare dashboard listing rows
-- [x] 4. Company-domain enrichment (Claude + web search)
-- [x] 5. Priority classification (Claude)
-- [x] 6. Supabase Auth (Google + email/password, sign-up and sign-in)
-- [x] 7. Per-enquiry detail view, sender history
-- [ ] 8. Chat-based record updates
-- [x] 9. Rate limit / daily cap on the public webhook — *pulled forward to step 4*
+Current state, what is outstanding, costs, and configuration live in
+**[STATUS.md](STATUS.md)**.
+
+Eight of the nine build-order steps are complete and deployed; the chat-based record
+update interface is the remaining item.
 
 ## Debugging log
 
