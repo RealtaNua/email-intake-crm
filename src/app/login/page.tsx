@@ -40,12 +40,23 @@ function LoginForm() {
 
       if (error) return setError(error.message);
 
+      // Supabase deliberately returns success for an email that already exists,
+      // to avoid leaking which addresses are registered. It signals the real
+      // outcome by returning an empty identities array. Without this branch the
+      // UI claims a new account was created when nothing happened.
+      if (data.user && data.user.identities?.length === 0) {
+        return setNotice(
+          "An account with this email already exists. Try signing in, or use the confirmation link already sent to you.",
+        );
+      }
+
       // If the project requires email confirmation there is no session yet.
       // Handling both settings means this works whichever way the Supabase
       // project is configured, instead of silently doing nothing.
       if (!data.session) {
         return setNotice(
-          "Account created. Check your inbox for a confirmation link, then sign in.",
+          "Account created. Check your inbox for a confirmation link, then sign in. " +
+            "If nothing arrives within a minute, check spam — confirmation email delivery is a known weak point.",
         );
       }
       router.push(next);
@@ -53,9 +64,28 @@ function LoginForm() {
       return;
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
-    if (error) return setError(error.message);
+
+    if (error) {
+      // Supabase returns a generic "Invalid login credentials" for an
+      // unconfirmed account as well as for a wrong password, which sends
+      // people hunting for a typo that isn't there.
+      if (error.message.toLowerCase().includes("email not confirmed")) {
+        return setError("This account has not been confirmed yet. Check your inbox for the confirmation link.");
+      }
+      return setError(error.message);
+    }
+
+    // No error but no session is possible, and previously fell through to a
+    // redirect that middleware immediately bounced back — which looked exactly
+    // like the button doing nothing at all.
+    if (!data.session) {
+      return setError(
+        "Signed in without an active session. The account most likely still needs email confirmation.",
+      );
+    }
+
     router.push(next);
     router.refresh();
     } catch (err) {
