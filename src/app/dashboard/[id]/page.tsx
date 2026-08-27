@@ -79,7 +79,7 @@ export default async function ContactPage({
       </header>
 
       {/* ── Where this stands ───────────────────────────────── */}
-      {contact.conversation_summary ? (
+      {contact.conversation_status || contact.next_step ? (
         <section className="mt-6 rounded-lg border border-slate-200 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-medium text-slate-900">Where this stands</h2>
@@ -89,10 +89,10 @@ export default async function ContactPage({
               </span>
             ) : null}
           </div>
-          <p className="mt-2 text-sm text-slate-700">{contact.conversation_summary}</p>
-          {contact.summary_updated_at ? (
-            <p className="mt-2 text-xs text-slate-400">
-              Updated {new Date(contact.summary_updated_at).toLocaleString()}
+          {contact.next_step && contact.next_step !== "None" ? (
+            <p className="mt-2 text-sm text-slate-700">
+              <span className="text-slate-400">Next: </span>
+              {contact.next_step}
             </p>
           ) : null}
         </section>
@@ -234,11 +234,11 @@ export default async function ContactPage({
                   />
                   <div className={`rounded-lg border p-4 ${outbound ? "border-slate-200 bg-slate-50" : "border-slate-200"}`}>
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <p className="font-medium text-slate-900">
+                      <p className="min-w-0 text-sm text-slate-800">
                         <span className={`mr-2 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${outbound ? "bg-slate-200 text-slate-600" : "bg-slate-900 text-white"}`}>
-                          {outbound ? "We replied" : "They wrote"}
+                          {outbound ? "We" : "They"}
                         </span>
-                        {message.subject || "(no subject)"}
+                        {message.summary || message.subject || "(no subject)"}
                       </p>
                       <span className="flex shrink-0 items-center gap-2">
                         {!outbound && message.priority ? (
@@ -275,7 +275,7 @@ export default async function ContactPage({
 
                     <details className="mt-3">
                       <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-900">
-                        Show full message
+                        {message.subject || "(no subject)"} — show full message
                       </summary>
                       <pre className="mt-2 whitespace-pre-wrap rounded-lg bg-white p-3 font-sans text-sm text-slate-700 ring-1 ring-slate-200">
                         {message.body_plain || "(empty)"}

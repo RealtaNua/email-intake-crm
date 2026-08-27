@@ -114,9 +114,16 @@ the intake address is BCC'd and `OWNER_EMAILS` is set (unset = feature off).
   a standing property of a person.
 - **Personal domains get no company row at all.** A "Gmail Inc." record would be
   worse than none.
-- **Conversation state lives on the contact** — `conversation_summary` and
-  `conversation_status` are produced by the *same* Claude call as classification,
-  not a second one. The model already has the thread in context.
+- **Each message carries its own one-sentence `summary`**, written once when that
+  message is processed and never rewritten. The timeline is just those lines in
+  date order. A whole-thread paragraph was tried first and replaced: it had to be
+  regenerated on every change, and it forced you to read all of it to find the one
+  line you needed.
+- **Conversation state lives on the contact** — `next_step` and
+  `conversation_status`, produced by the *same* Claude call as classification.
+- **Our own replies are not triaged.** Outbound messages use a smaller tool
+  (`record_reply`) that returns only a summary, next step, and status. Rating a
+  message we wrote ourselves is meaningless.
 - **`remarks` is human-only.** The model never writes or overwrites it. `notes` is
   the model-writable field.
 - **Classification receives the whole thread, both directions.** Without the

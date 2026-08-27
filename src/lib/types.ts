@@ -28,7 +28,7 @@ export type Contact = {
   notes: ContactNote[];
   total_received: number;
   remarks: string | null;
-  conversation_summary: string | null;
+  next_step: string | null;
   conversation_status: string | null;
   summary_updated_at: string | null;
   first_seen_at: string;
@@ -67,6 +67,7 @@ export type Enquiry = {
   body_html: string | null;
   status: string;
   direction: "inbound" | "outbound";
+  summary: string | null;
   priority: "urgent" | "high" | "normal" | "low" | null;
   priority_reasoning: string | null;
   priority_signals: string[] | null;
@@ -80,7 +81,7 @@ export type ContactWithRelations = Contact & {
   companies: Pick<Company, "domain" | "profile" | "enrichment_status"> | null;
   enquiries: Pick<
     Enquiry,
-    "id" | "subject" | "priority" | "received_at" | "direction" | "body_plain"
+    "id" | "subject" | "priority" | "received_at" | "direction" | "body_plain" | "summary"
   >[];
 };
 

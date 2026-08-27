@@ -46,12 +46,20 @@ const CLASSIFY_TOOL: Anthropic.Tool = {
         type: "string",
         description: "Plain-language target, e.g. 'today', 'within 2 working days', 'no deadline'.",
       },
-      conversation_summary: {
+      message_summary: {
         type: "string",
         description:
-          "Two or three sentences covering the whole thread with this contact, both directions: " +
-          "what they want, what has been said back, and where it now stands. Write it so someone " +
-          "picking this up cold knows what to do next without reading the emails.",
+          "ONE sentence describing what THIS message did, in past tense. It becomes a line " +
+          "in a dated timeline, so it must stand alone and carry the specifics that matter " +
+          "(names, figures, dates). Do not summarise the whole thread — only this message. " +
+          "Example: 'Confirmed L&D head Serene Ho as sponsor, accepted 12-14 March and " +
+          "offered to raise a PO on receipt of the revised proposal.'",
+      },
+      next_step: {
+        type: "string",
+        description:
+          "The single next action, one short sentence, or 'None' if nothing is owed. " +
+          "Say who owes it.",
       },
       conversation_status: {
         type: "string",
@@ -68,9 +76,44 @@ const CLASSIFY_TOOL: Anthropic.Tool = {
       },
     },
     required: [
-      "priority", "reasoning", "signals", "respond_by",
-      "conversation_summary", "conversation_status",
+      "message_summary", "priority", "reasoning", "signals", "respond_by",
+      "next_step", "conversation_status",
     ],
+  },
+};
+
+/**
+ * Our own replies do not get triaged — rating a message we wrote is
+ * meaningless. They still need a timeline line and they still change whose
+ * court the ball is in, so they get this smaller tool instead.
+ */
+const RECORD_REPLY_TOOL: Anthropic.Tool = {
+  name: "record_reply",
+  description: "Record a reply WE sent. Call exactly once.",
+  strict: true,
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      message_summary: {
+        type: "string",
+        description:
+          "ONE sentence describing what we said, in past tense, carrying the specifics " +
+          "(dates offered, questions asked, commitments made). It becomes a timeline line.",
+      },
+      next_step: {
+        type: "string",
+        description: "The single next action, one short sentence, or 'None'. Say who owes it.",
+      },
+      conversation_status: {
+        type: "string",
+        enum: [
+          "awaiting_our_reply", "awaiting_their_reply", "scheduled",
+          "closed_won", "closed_lost", "no_action_needed",
+        ],
+      },
+    },
+    required: ["message_summary", "next_step", "conversation_status"],
   },
 };
 
@@ -101,6 +144,14 @@ HOW TO JUDGE
 
 Finish by calling record_priority exactly once.`;
 
+const REPLY_SYSTEM = `You maintain the conversation record for the business described below.
+
+The message you are given is one WE sent. Do not rate it — summarise what we said in
+one sentence for the timeline, then say whose court the ball is now in and what the
+next action is.
+
+Finish by calling record_reply exactly once.`;
+
 /**
  * Assign a priority with reasoning. Runs after enrichment so the company
  * profile, when there is one, informs the judgement.
@@ -114,7 +165,7 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
   const { data: enquiry, error: readError } = await supabase
     .from("enquiries")
     .select(
-      "id, contact_id, sender_email, sender_name, sender_domain, subject, body_plain, classification_status, contacts ( id, name, company_id, status, total_received, notes, companies ( domain, profile ) )",
+      "id, contact_id, direction, sender_email, sender_name, sender_domain, subject, body_plain, classification_status, contacts ( id, name, company_id, status, total_received, notes, companies ( domain, profile ) )",
     )
     .eq("id", enquiryId)
     .single();
@@ -204,11 +255,14 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
       }
     }
 
+    const isOutbound =
+      (enquiry as unknown as { direction: string }).direction === "outbound";
+
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 2000,
       output_config: { effort: "medium" },
-      system: SYSTEM,
+      system: isOutbound ? REPLY_SYSTEM : SYSTEM,
       messages: [
         {
           role: "user",
@@ -222,13 +276,14 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
             `FULL THREAD WITH THIS CONTACT (oldest first)\n${threadSection}`,
         },
       ],
-      tools: [CLASSIFY_TOOL],
+      tools: [isOutbound ? RECORD_REPLY_TOOL : CLASSIFY_TOOL],
     });
 
     await recordTokens(response.usage.input_tokens, response.usage.output_tokens);
 
+    const expectedTool = isOutbound ? "record_reply" : "record_priority";
     const block = response.content.find(
-      (b) => b.type === "tool_use" && b.name === "record_priority",
+      (b) => b.type === "tool_use" && b.name === expectedTool,
     );
 
     if (!block || block.type !== "tool_use") {
@@ -238,11 +293,12 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
     }
 
     const decision = block.input as {
-      priority: Priority;
-      reasoning: string;
-      signals: string[];
-      respond_by: string;
-      conversation_summary: string;
+      message_summary: string;
+      priority?: Priority;
+      reasoning?: string;
+      signals?: string[];
+      respond_by?: string;
+      next_step: string;
       conversation_status: string;
     };
 
@@ -252,7 +308,7 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
       await supabase
         .from("contacts")
         .update({
-          conversation_summary: decision.conversation_summary,
+          next_step: decision.next_step,
           conversation_status: decision.conversation_status,
           summary_updated_at: new Date().toISOString(),
         })
@@ -260,14 +316,24 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
     }
 
     await setStatus({
-      priority: decision.priority,
-      priority_reasoning: decision.reasoning,
-      priority_signals: decision.signals,
-      respond_by: decision.respond_by,
+      summary: decision.message_summary,
+      // Priority only applies to messages they sent us.
+      ...(isOutbound
+        ? {}
+        : {
+            priority: decision.priority,
+            priority_reasoning: decision.reasoning,
+            priority_signals: decision.signals,
+            respond_by: decision.respond_by,
+          }),
       classification_status: "classified",
       classified_at: new Date().toISOString(),
     });
-    console.log("[classify]", enquiryId, "->", decision.priority, "|", decision.respond_by);
+    console.log(
+      "[classify]", enquiryId,
+      isOutbound ? "(reply)" : `-> ${decision.priority}`,
+      "|", decision.conversation_status,
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[classify] failed for", enquiryId, message);

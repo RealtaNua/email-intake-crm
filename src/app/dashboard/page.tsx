@@ -17,7 +17,7 @@ export default async function DashboardPage() {
   // why this reads from contacts rather than from the message log.
   const { data, error } = await supabase
     .from("contacts")
-    .select("*, companies ( domain, profile, enrichment_status ), enquiries ( id, subject, priority, received_at, direction, body_plain )")
+    .select("*, companies ( domain, profile, enrichment_status ), enquiries ( id, subject, priority, received_at, direction, body_plain, summary )")
     .order("last_seen_at", { ascending: false })
     .limit(100);
 
@@ -120,46 +120,49 @@ export default async function DashboardPage() {
                   <p className="mt-2 text-xs text-slate-400">Personal email domain</p>
                 )}
 
-                {contact.conversation_summary ? (
-                  <p className="mt-3 border-l-2 border-slate-200 pl-3 text-sm text-slate-600">
-                    {contact.conversation_summary}
+                {/* Vertical timeline: one dated line per message. A count tells
+                    you nothing; a paragraph makes you read all of it to find the
+                    one line you need. */}
+                <ol className="mt-3 border-t border-slate-100 pt-3">
+                  {[...(contact.enquiries ?? [])]
+                    .sort((a, b) => +new Date(a.received_at) - +new Date(b.received_at))
+                    .map((message) => {
+                      const outbound = message.direction === "outbound";
+                      return (
+                        <li key={message.id} className="relative flex gap-3 pb-3 last:pb-0">
+                          <span className="w-20 shrink-0 pt-0.5 text-xs tabular-nums text-slate-400">
+                            {new Date(message.received_at).toLocaleDateString(undefined, {
+                              day: "numeric", month: "short",
+                            })}
+                          </span>
+                          <span
+                            className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                              outbound ? "bg-slate-300" : "bg-slate-900"
+                            }`}
+                            aria-hidden="true"
+                          />
+                          <details className="min-w-0 flex-1">
+                            <summary className="cursor-pointer text-sm text-slate-700 marker:text-slate-300">
+                              <span className={outbound ? "text-slate-500" : "text-slate-800"}>
+                                {outbound ? "We: " : "They: "}
+                              </span>
+                              {message.summary || message.subject || "(no subject)"}
+                            </summary>
+                            <pre className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-sans text-sm text-slate-700">
+                              {message.body_plain || "(empty)"}
+                            </pre>
+                          </details>
+                        </li>
+                      );
+                    })}
+                </ol>
+
+                {contact.next_step && contact.next_step !== "None" ? (
+                  <p className="mt-2 border-t border-slate-100 pt-3 text-sm">
+                    <span className="text-slate-400">Next: </span>
+                    <span className="text-slate-700">{contact.next_step}</span>
                   </p>
                 ) : null}
-
-                {/* The messages themselves, newest first, each expandable.
-                    A count alone tells you nothing about what was said. */}
-                <ul className="mt-3 divide-y divide-slate-100 border-t border-slate-100">
-                  {[...(contact.enquiries ?? [])]
-                    .sort((a, b) => +new Date(b.received_at) - +new Date(a.received_at))
-                    .map((message) => (
-                      <li key={message.id} className="py-2">
-                        <details>
-                          <summary className="flex cursor-pointer flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-sm hover:text-slate-900">
-                            <span className="text-slate-700">
-                              <span
-                                className={`mr-2 rounded px-1 py-0.5 text-[10px] font-medium uppercase ${
-                                  message.direction === "outbound"
-                                    ? "bg-slate-200 text-slate-600"
-                                    : "bg-slate-100 text-slate-500"
-                                }`}
-                              >
-                                {message.direction === "outbound" ? "Sent" : "Received"}
-                              </span>
-                              {message.subject || "(no subject)"}
-                            </span>
-                            <span className="shrink-0 text-xs tabular-nums text-slate-400">
-                              {new Date(message.received_at).toLocaleDateString(undefined, {
-                                day: "numeric", month: "short", year: "numeric",
-                              })}
-                            </span>
-                          </summary>
-                          <pre className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-sans text-sm text-slate-700">
-                            {message.body_plain || "(empty)"}
-                          </pre>
-                        </details>
-                      </li>
-                    ))}
-                </ul>
 
                 <p className="mt-3 text-xs text-slate-500">
                   {count} {count === 1 ? "message" : "messages"}
