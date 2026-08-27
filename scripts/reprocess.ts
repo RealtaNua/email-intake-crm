@@ -8,7 +8,9 @@
  * This is the same operation for ops work: backfilling after a schema change,
  * or recovering records that were capped or failed.
  *
- * Every message costs a Claude call and counts against the daily cap.
+ * COST: one Claude call per message, plus one to re-research the company. A contact
+ * with five messages costs six calls, not one. Get the owner's explicit permission
+ * before running this — for a single contact as well as for --all.
  */
 process.loadEnvFile(".env.local");
 
@@ -67,6 +69,19 @@ async function main() {
     console.error(`no contact matching ${target}`);
     process.exit(1);
   }
+
+  // Make the cost visible before spending it, so an accidental --all is obvious
+  // from the output rather than from the bill.
+  const { count } = await admin
+    .from("enquiries")
+    .select("id", { count: "exact", head: true })
+    .in("contact_id", contacts.map((c) => c.id));
+  const companies = contacts.filter((c) => c.company_id).length;
+  console.log(
+    `About to reprocess ${contacts.length} contact(s): ` +
+      `${count ?? "?"} message(s) + ${companies} company research = ` +
+      `~${(count ?? 0) + companies} Claude calls.`,
+  );
 
   for (const contact of contacts) await reprocessContact(admin, contact);
 

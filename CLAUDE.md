@@ -140,6 +140,22 @@ Dependencies: `next`, `react`, `@anthropic-ai/sdk`, `@supabase/supabase-js`,
 
 ## Non-negotiable working conventions
 
+**Ask before reprocessing anything. Every time.**
+
+Reprocessing re-researches the company *and* re-classifies every message on the
+contact, so a contact with five messages costs six Claude calls, not one. It is the
+single most expensive operation in this system and the cost is not obvious from the
+command.
+
+- Never run `scripts/reprocess.ts` — for one contact or `--all` — without explicit
+  permission for that specific run.
+- State the expected cost first: messages × 1 call, plus 1 if the company will be
+  re-researched.
+- To verify a fix, test on a single message rather than re-running a whole contact.
+
+This exists because two reprocess runs during debugging consumed 12 of one day's 20
+calls, and the owner had to ask why five emails had cost twenty calls.
+
 **Commit in small, real increments. Do not batch work into one large commit.** The
 "live debugging" requirement is met through honest git history: real commits showing
 real bugs hit and fixed.
@@ -278,8 +294,9 @@ is the most open-ended piece.
 ## Ops
 
 ```bash
+# BOTH REQUIRE THE OWNER'S EXPLICIT PERMISSION FOR EACH RUN — see conventions above.
 npx tsx scripts/reprocess.ts <email>   # re-run research + triage for one contact
-npx tsx scripts/reprocess.ts --all     # everyone; costs one Claude call per message
+npx tsx scripts/reprocess.ts --all     # everyone; one call per message, plus research
 ```
 
 The dashboard button does the same thing but needs a logged-in session. The script
