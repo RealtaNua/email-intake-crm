@@ -33,7 +33,7 @@ returns 200. Enrichment happens off the request path.
 
 - [x] 1. Scaffold Next.js, connect Supabase + Vercel
 - [x] 2. Inbound webhook writing raw rows — **confirmed end to end with a real email**
-- [ ] 3. Bare dashboard listing rows
+- [x] 3. Bare dashboard listing rows
 - [ ] 4. Company-domain enrichment (Claude + web search)
 - [ ] 5. Priority classification (Claude)
 - [ ] 6. Supabase Auth (Google + email/password, sign-up and sign-in)
