@@ -1,7 +1,10 @@
 # STATUS
 
-**Read this first, at the start of every session.** `CLAUDE.md` holds the durable
-architecture and rules; this file holds everything that changes.
+This file is imported by `CLAUDE.md` via `@STATUS.md`, so it loads automatically at
+the start of every session. `CLAUDE.md` holds the durable architecture and rules;
+this file holds everything that changes.
+
+**Keep it current.** It is loaded as fact, so anything stale here is read as true.
 
 Last updated: 2026-08-27 · 30 commits · 9 migrations
 

@@ -1,9 +1,17 @@
 # CLAUDE.md — Email Intake & Triage CRM
 
-> **Read [STATUS.md](STATUS.md) first, once, at the start of every session.**
-> It holds what is built, what is outstanding, what things cost, and what is
-> configured. This file holds only what does not change: architecture, rules, and
-> the mistakes already paid for.
+@STATUS.md
+
+> The line above is an import, not a link. Claude Code pulls STATUS.md into context
+> at launch, so current state is always loaded — it does not depend on anyone
+> remembering to open it.
+>
+> **STATUS.md** holds everything that changes: what is built, what is outstanding,
+> what things cost, what is configured. **This file** holds only what does not:
+> architecture, rules, and the mistakes already paid for.
+>
+> Both load once per session, at start. Neither re-reads mid-session, so if STATUS.md
+> is edited during a session, re-read it before relying on it.
 
 ## What this is
 
