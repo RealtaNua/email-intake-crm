@@ -47,7 +47,10 @@ Added after the fact, in response to how the thing actually behaved:
   reader, so sign-offs survive.
 - **Per-call cost logging** (0009) at `/dashboard/usage` — purpose, subject, tokens,
   and price at time of call.
-- **Navigation and visual design** — gradient header, cards, stat tiles, badges.
+- **Navigation and visual design** — gradient header with content overlapping it,
+  cards, stat tiles, tinted badges. Owner reviewed and approved: *"style is good, no
+  changes needed here."* Do not restyle without being asked. The design system is
+  documented in `CLAUDE.md`.
 - **`scripts/reprocess.ts`** for ops backfills.
 
 ## Current data

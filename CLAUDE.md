@@ -149,9 +149,94 @@ Each cost real time. Full write-ups in `TROUBLESHOOTING.md`.
    insert or delete** — rows come only from the webhook via `service_role`.
 8. **Sender history is split** into same-address and same-domain. Merging them would
    imply a relationship with someone who has never written.
-9. **Styling is Tailwind**, committed to a single light theme with tokens in
-   `globals.css`. Shared UI lives in `src/components/` — `Badge`, `StatTile`,
-   `NextStep`, `LocalTime`, `MessageView`.
+9. **Styling is Tailwind**, committed to a single light theme. See the design system
+   below before adding any UI.
+
+---
+
+## Design system
+
+Tailwind v4, one committed light theme. Bootstrap was considered and rejected: the
+project has used Tailwind since scaffold, so switching would mean rewriting working
+styles for no benefit.
+
+### Tokens — `src/app/globals.css`
+
+Defined on `:root` and exposed to Tailwind through `@theme inline`, so they are usable
+as `bg-page`, `text-ink`, `text-ink-muted`, `bg-brand`, `bg-brand-deep`, `bg-surface`.
+
+| Token | Value | Use |
+|---|---|---|
+| `--page` | `#f5f6fb` | Body canvas. Tinted on purpose, so white cards read as raised. |
+| `--surface` | `#ffffff` | Cards. |
+| `--ink` | `#1e2235` | Primary text. Not pure black. |
+| `--ink-muted` | `#6b7192` | Secondary text, labels, timestamps. |
+| `--brand` | `#6d5ae6` | Violet. Links, active nav, primary buttons, inbound markers. |
+| `--brand-deep` | `#5b46d4` | Gradient end, button hover. |
+
+**No dark theme.** The scaffold's `prefers-color-scheme` block was removed — it
+flipped the page to near-black while every component stayed light. A design that
+commits to one palette and paints it explicitly beats one that half-supports two. If
+dark mode is ever wanted, every colour must be defined in both, not just the page.
+
+`globals.css` also sets the body font to the Geist family the layout loads. The
+scaffold hardcoded `font-family: Arial` here, which silently overrode it.
+
+### Custom utilities
+
+```css
+@utility card        /* white, rounded-2xl, two-layer soft shadow */
+@utility card-hover  /* transition; :hover deepens shadow and lifts 1px */
+```
+
+Cards are **lifted with shadow, never outlined with a border**. Adding
+`border border-slate-200` to a `.card` reintroduces the flat look the shadow exists to
+avoid. Disclosure triangles are hidden globally — they are noisy at this density.
+
+### Layout pattern
+
+The dashboard layout paints a `bg-gradient-to-br from-brand to-brand-deep` block with
+`pb-24`, and the content container pulls up over it with `-mt-20`. **That overlap is
+what creates the depth** — without it the gradient is just a coloured band. Page
+headings sit *on* the gradient, so they use `text-white` and `text-white/70`, not the
+ink tokens.
+
+Content is `max-w-5xl` with `px-6`. Cards stack with `space-y-4`; grids use `gap-4`.
+
+### Components — `src/components/`
+
+Use these rather than re-styling inline. Priority and status pills had been
+copy-pasted across three files and were already drifting before `Badge` existed.
+
+| Component | Purpose |
+|---|---|
+| `Badge` | Soft tinted pill: `bg-{tone}-50 text-{tone}-700 ring-{tone}-100`. Exports `PRIORITY_TONE` and `CONVERSATION_TONE` so a status maps to a colour in exactly one place. |
+| `StatTile` | Headline number, uppercase label, accent bar. For the row above a list. |
+| `NextStep` | Pending action. Bold text in a tinted box. |
+| `LocalTime` | Timestamps. Never format dates inline — see gotcha 8. |
+| `MessageView` | An email rendered as an email: header block, body, sign-off. |
+| `NavLink` | Nav pill with active state, styled for the gradient header. |
+
+### Colour carries meaning — keep it scarce
+
+- **Red** = urgent, *and* the ball is in our court. Nothing else.
+- **Amber** = pending, waiting on us, at the cap.
+- **Sky** = normal priority, scheduled.
+- **Emerald** = money received, won, active client.
+- **Violet** = the brand, and neutral metadata like "has remarks".
+- **Slate** = low priority, closed, anything inert.
+
+`NextStep` is red only when urgent *and* on us; amber otherwise. If everything pending
+were red, red would stop meaning anything.
+
+### Rules
+
+1. Reach for a token or an existing component before writing a new colour.
+2. Never format a timestamp outside `LocalTime`.
+3. `npx eslint src --max-warnings=0` must pass — it catches unused imports left behind
+   by restyles.
+4. Do not add a border to a `.card`.
+5. Headings on the gradient are white; headings on cards use `text-ink`.
 
 ---
 
