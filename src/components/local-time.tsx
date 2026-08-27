@@ -32,7 +32,16 @@ export function LocalTime({
   const [local, setLocal] = useState<{ text: string; title: string } | null>(null);
 
   useEffect(() => {
+    // The linter flags setState inside an effect because it usually means
+    // derived state that belongs in render. This is the other case the rule
+    // describes as legitimate: reading from an external system — the browser's
+    // own timezone, which does not exist during server rendering.
+    //
+    // It cannot move into render: the first client render has to match the
+    // server's output byte for byte or hydration fails, which is the entire
+    // problem this component exists to solve.
     const date = new Date(iso);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLocal({ text: format(date, variant), title: fullTitle(date) });
   }, [iso, variant]);
 

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { LocalTime } from "@/components/local-time";
@@ -57,11 +56,7 @@ export default async function UsagePage() {
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
-      <Link href="/dashboard" className="text-sm text-slate-500 hover:text-slate-900">
-        ← All contacts
-      </Link>
-
-      <header className="mt-6">
+      <header>
         <h1 className="text-xl font-semibold tracking-tight text-slate-900">Claude usage</h1>
         <p className="mt-1 text-sm text-slate-500">
           Every call, what it was for, and what it cost. The daily cap counts calls, not dollars.

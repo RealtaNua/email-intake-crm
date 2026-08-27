@@ -4,6 +4,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { reprocessContact, logReply, saveRemarks } from "../actions";
 import { LocalTime } from "@/components/local-time";
 import { MessageView } from "@/components/message-view";
+import { NextStep } from "@/components/next-step";
 import {
   PRIORITY_STYLES, CONVERSATION_LABELS, CONVERSATION_STYLES,
   type Contact, type Company, type Enquiry,
@@ -91,12 +92,14 @@ export default async function ContactPage({
               </span>
             ) : null}
           </div>
-          {contact.next_step && contact.next_step !== "None" ? (
-            <p className="mt-2 text-sm text-slate-700">
-              <span className="text-slate-400">Next: </span>
-              {contact.next_step}
-            </p>
-          ) : null}
+          <NextStep
+            text={contact.next_step}
+            urgent={
+              contact.conversation_status === "awaiting_our_reply" &&
+              enquiries.some((e) => e.priority === "urgent")
+            }
+            className="mt-3"
+          />
         </section>
       ) : null}
 

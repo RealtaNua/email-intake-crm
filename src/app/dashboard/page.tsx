@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { LocalTime } from "@/components/local-time";
 import { MessageView } from "@/components/message-view";
+import { NextStep } from "@/components/next-step";
 import {
   PRIORITY_STYLES, CONVERSATION_LABELS, CONVERSATION_STYLES,
   topPriority, type ContactWithRelations,
@@ -36,15 +37,6 @@ export default async function DashboardPage() {
 
   const contacts = (data ?? []) as unknown as ContactWithRelations[];
 
-  // Today's spend, so the cost of the thing is visible from the thing itself
-  // rather than only from a bill at the end of the month.
-  const startOfDayUtc = new Date();
-  startOfDayUtc.setUTCHours(0, 0, 0, 0);
-  const { data: todaysCalls } = await supabase
-    .from("claude_calls")
-    .select("cost_usd")
-    .gte("created_at", startOfDayUtc.toISOString());
-  const spentToday = (todaysCalls ?? []).reduce((sum, c) => sum + Number(c.cost_usd), 0);
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-12">
@@ -58,27 +50,9 @@ export default async function DashboardPage() {
             </code>
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <span className="text-sm tabular-nums text-slate-500">
-            {contacts.length} {contacts.length === 1 ? "contact" : "contacts"}
-          </span>
-          <Link
-            href="/dashboard/usage"
-            title="Claude usage and cost"
-            className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs tabular-nums text-slate-600 transition-colors hover:bg-slate-50"
-          >
-            ${spentToday.toFixed(2)} today
-          </Link>
-          <form action="/auth/signout" method="post">
-            <button
-              type="submit"
-              title={user.email ?? undefined}
-              className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-50"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
+        <span className="shrink-0 text-sm tabular-nums text-slate-500">
+          {contacts.length} {contacts.length === 1 ? "contact" : "contacts"}
+        </span>
       </header>
 
       {contacts.length === 0 ? (
@@ -175,12 +149,11 @@ export default async function DashboardPage() {
                     })}
                 </ol>
 
-                {contact.next_step && contact.next_step !== "None" ? (
-                  <p className="mt-2 border-t border-slate-100 pt-3 text-sm">
-                    <span className="text-slate-400">Next: </span>
-                    <span className="text-slate-700">{contact.next_step}</span>
-                  </p>
-                ) : null}
+                <NextStep
+                  text={contact.next_step}
+                  urgent={contact.conversation_status === "awaiting_our_reply" && priority === "urgent"}
+                  className="mt-3"
+                />
 
                 <p className="mt-3 text-xs text-slate-500">
                   {count} {count === 1 ? "message" : "messages"}
