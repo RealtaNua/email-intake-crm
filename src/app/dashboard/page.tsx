@@ -36,6 +36,16 @@ export default async function DashboardPage() {
 
   const contacts = (data ?? []) as unknown as ContactWithRelations[];
 
+  // Today's spend, so the cost of the thing is visible from the thing itself
+  // rather than only from a bill at the end of the month.
+  const startOfDayUtc = new Date();
+  startOfDayUtc.setUTCHours(0, 0, 0, 0);
+  const { data: todaysCalls } = await supabase
+    .from("claude_calls")
+    .select("cost_usd")
+    .gte("created_at", startOfDayUtc.toISOString());
+  const spentToday = (todaysCalls ?? []).reduce((sum, c) => sum + Number(c.cost_usd), 0);
+
   return (
     <main className="mx-auto max-w-4xl px-6 py-12">
       <header className="mb-8 flex flex-wrap items-baseline justify-between gap-4">
@@ -52,6 +62,13 @@ export default async function DashboardPage() {
           <span className="text-sm tabular-nums text-slate-500">
             {contacts.length} {contacts.length === 1 ? "contact" : "contacts"}
           </span>
+          <Link
+            href="/dashboard/usage"
+            title="Claude usage and cost"
+            className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs tabular-nums text-slate-600 transition-colors hover:bg-slate-50"
+          >
+            ${spentToday.toFixed(2)} today
+          </Link>
           <form action="/auth/signout" method="post">
             <button
               type="submit"

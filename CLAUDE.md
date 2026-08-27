@@ -242,15 +242,20 @@ observation. Consult the authority — Mailgun's event stream, the token ledger,
    cheaper options, with the daily cap lowered to 25 instead. Measured cost is
    ~$0.15–0.25 per enriched enquiry; full effort measured $0.54, almost all of it
    web search results re-entering context.
-5. **The cost cap is a single atomic Postgres statement** (`claim_claude_call`), not
+5. **Cost is logged per call** in `claude_calls` — purpose, what it touched, tokens,
+   and the price at the time of the call. Rates live in `RATES` in `src/lib/claude.ts`
+   and must be updated alongside the model. `/dashboard/usage` renders it. The daily
+   counter in `claude_usage` stays because the cap claim must remain one cheap atomic
+   statement, not a count over a growing table.
+6. **The cost cap is a single atomic Postgres statement** (`claim_claude_call`), not
    read-then-write — concurrent inbound mail is exactly when a check-then-act race
    would breach the ceiling. It **fails closed**.
-6. **Personal domains skip enrichment entirely.** Researching the company behind a
+7. **Personal domains skip enrichment entirely.** Researching the company behind a
    gmail.com address produces confident nonsense.
-7. **RLS is the real security boundary.** The dashboard reads as the logged-in user
+8. **RLS is the real security boundary.** The dashboard reads as the logged-in user
    via the anon key. `authenticated` has select and update but deliberately **no
    insert or delete** — rows come only from the webhook via `service_role`.
-8. **Sender history is split** into same-address ("this person") and same-domain
+9. **Sender history is split** into same-address ("this person") and same-domain
    ("others at this company"). Merging them would imply a relationship with someone
    who has never written.
 11. **Never let the model claim something is unknown when the database knows it.**

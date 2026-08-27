@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClaudeClient, MODEL, claimClaudeCall, recordTokens } from "@/lib/claude";
+import { createClaudeClient, MODEL, claimClaudeCall, recordCall } from "@/lib/claude";
 import { BUSINESS_CONTEXT } from "@/lib/business-context";
 
 export type Priority = "urgent" | "high" | "normal" | "low";
@@ -307,7 +307,12 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
       tools: [isOutbound ? RECORD_REPLY_TOOL : CLASSIFY_TOOL],
     });
 
-    await recordTokens(response.usage.input_tokens, response.usage.output_tokens);
+    await recordCall({
+      purpose: isOutbound ? "classify_reply" : "classify_inbound",
+      usage: response.usage,
+      enquiryId,
+      contactId: (enquiry as unknown as { contact_id: string | null }).contact_id,
+    });
 
     const expectedTool = isOutbound ? "record_reply" : "record_priority";
     const block = response.content.find(

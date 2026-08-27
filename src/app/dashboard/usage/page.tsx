@@ -1,0 +1,167 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { createServerSupabase } from "@/lib/supabase/server";
+import { LocalTime } from "@/components/local-time";
+
+export const dynamic = "force-dynamic";
+
+const PURPOSE_LABELS: Record<string, string> = {
+  enrich_company: "Company research",
+  classify_inbound: "Triage (inbound)",
+  classify_reply: "Reply logged",
+  chat_update: "Chat update",
+};
+
+type Call = {
+  id: string;
+  created_at: string;
+  purpose: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  web_search_requests: number;
+  cost_usd: number;
+  contacts: { email: string; name: string | null } | null;
+  companies: { domain: string } | null;
+};
+
+export default async function UsagePage() {
+  const supabase = await createServerSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data } = await supabase
+    .from("claude_calls")
+    .select("*, contacts ( email, name ), companies ( domain )")
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  const calls = (data ?? []) as unknown as Call[];
+
+  const startOfDayUtc = new Date();
+  startOfDayUtc.setUTCHours(0, 0, 0, 0);
+  const today = calls.filter((c) => new Date(c.created_at) >= startOfDayUtc);
+
+  const spentToday = today.reduce((sum, c) => sum + Number(c.cost_usd), 0);
+  const spentAll = calls.reduce((sum, c) => sum + Number(c.cost_usd), 0);
+
+  // What is the money actually going on? This is the question the daily
+  // counter could not answer.
+  const byPurpose = new Map<string, { count: number; cost: number }>();
+  for (const call of calls) {
+    const entry = byPurpose.get(call.purpose) ?? { count: 0, cost: 0 };
+    entry.count += 1;
+    entry.cost += Number(call.cost_usd);
+    byPurpose.set(call.purpose, entry);
+  }
+
+  return (
+    <main className="mx-auto max-w-4xl px-6 py-10">
+      <Link href="/dashboard" className="text-sm text-slate-500 hover:text-slate-900">
+        ← All contacts
+      </Link>
+
+      <header className="mt-6">
+        <h1 className="text-xl font-semibold tracking-tight text-slate-900">Claude usage</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Every call, what it was for, and what it cost. The daily cap counts calls, not dollars.
+        </p>
+      </header>
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-slate-200 p-4">
+          <p className="text-xs text-slate-400">Today (UTC)</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">
+            ${spentToday.toFixed(2)}
+          </p>
+          <p className="text-xs text-slate-500">{today.length} calls</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 p-4">
+          <p className="text-xs text-slate-400">Last 200 calls</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">
+            ${spentAll.toFixed(2)}
+          </p>
+          <p className="text-xs text-slate-500">{calls.length} calls</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 p-4">
+          <p className="text-xs text-slate-400">Average per call</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">
+            ${calls.length ? (spentAll / calls.length).toFixed(3) : "0.000"}
+          </p>
+        </div>
+      </div>
+
+      <section className="mt-8">
+        <h2 className="text-sm font-medium text-slate-900">Where it goes</h2>
+        <ul className="mt-2 space-y-1">
+          {[...byPurpose.entries()]
+            .sort((a, b) => b[1].cost - a[1].cost)
+            .map(([purpose, stats]) => (
+              <li key={purpose} className="flex items-baseline justify-between gap-4 border-b border-slate-100 py-1.5 text-sm">
+                <span className="text-slate-700">{PURPOSE_LABELS[purpose] ?? purpose}</span>
+                <span className="shrink-0 tabular-nums text-slate-500">
+                  {stats.count} × &nbsp; ${stats.cost.toFixed(2)}
+                  <span className="ml-2 text-slate-400">
+                    (${(stats.cost / stats.count).toFixed(3)} each)
+                  </span>
+                </span>
+              </li>
+            ))}
+        </ul>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="text-sm font-medium text-slate-900">Recent calls</h2>
+        {calls.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-500">
+            No calls logged yet. Logging started when this table was added — earlier calls
+            exist only in the daily totals.
+          </p>
+        ) : (
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs text-slate-400">
+                  <th className="py-2 pr-4 font-normal">When</th>
+                  <th className="py-2 pr-4 font-normal">Purpose</th>
+                  <th className="py-2 pr-4 font-normal">About</th>
+                  <th className="py-2 pr-4 text-right font-normal">In</th>
+                  <th className="py-2 pr-4 text-right font-normal">Out</th>
+                  <th className="py-2 pr-4 text-right font-normal">Search</th>
+                  <th className="py-2 text-right font-normal">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {calls.map((call) => (
+                  <tr key={call.id} className="border-b border-slate-100">
+                    <td className="py-1.5 pr-4 text-xs text-slate-500">
+                      <LocalTime iso={call.created_at} />
+                    </td>
+                    <td className="py-1.5 pr-4 text-slate-700">
+                      {PURPOSE_LABELS[call.purpose] ?? call.purpose}
+                    </td>
+                    <td className="max-w-[16rem] truncate py-1.5 pr-4 text-slate-500">
+                      {call.contacts?.name || call.contacts?.email || call.companies?.domain || "—"}
+                    </td>
+                    <td className="py-1.5 pr-4 text-right tabular-nums text-slate-500">
+                      {call.input_tokens.toLocaleString()}
+                    </td>
+                    <td className="py-1.5 pr-4 text-right tabular-nums text-slate-500">
+                      {call.output_tokens.toLocaleString()}
+                    </td>
+                    <td className="py-1.5 pr-4 text-right tabular-nums text-slate-400">
+                      {call.web_search_requests || ""}
+                    </td>
+                    <td className="py-1.5 text-right tabular-nums text-slate-700">
+                      ${Number(call.cost_usd).toFixed(3)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}

@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClaudeClient, MODEL, claimClaudeCall, recordTokens } from "@/lib/claude";
+import { createClaudeClient, MODEL, claimClaudeCall, recordCall } from "@/lib/claude";
 import { isPersonalDomain } from "@/lib/personal-domains";
 
 export type CompanyProfile = {
@@ -125,8 +125,6 @@ export async function enrichCompany(companyId: string): Promise<void> {
     ];
 
     let profile: CompanyProfile | null = null;
-    let totalIn = 0;
-    let totalOut = 0;
 
     // Server-side web search can pause the turn; resume until Claude either
     // records the profile or we hit the iteration ceiling.
@@ -147,8 +145,11 @@ export async function enrichCompany(companyId: string): Promise<void> {
         ],
       });
 
-      totalIn += response.usage.input_tokens;
-      totalOut += response.usage.output_tokens;
+      await recordCall({
+        purpose: "enrich_company",
+        usage: response.usage,
+        companyId,
+      });
 
       for (const block of response.content) {
         if (block.type === "tool_use" && block.name === "record_company_profile") {
@@ -160,8 +161,6 @@ export async function enrichCompany(companyId: string): Promise<void> {
       if (response.stop_reason !== "pause_turn") break;
       messages.push({ role: "assistant", content: response.content });
     }
-
-    await recordTokens(totalIn, totalOut);
 
     if (!profile) {
       console.warn("[enrich] no profile recorded for", company.domain);
