@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { LocalTime } from "@/components/local-time";
 import {
   PRIORITY_STYLES, CONVERSATION_LABELS, CONVERSATION_STYLES,
-  timeAgo, topPriority, type ContactWithRelations,
+  topPriority, type ContactWithRelations,
 } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -93,7 +94,7 @@ export default async function DashboardPage() {
                         {priority}
                       </span>
                     ) : null}
-                    <time className="text-xs tabular-nums text-slate-500">{timeAgo(contact.last_seen_at)}</time>
+                    <LocalTime iso={contact.last_seen_at} variant="relative" className="text-xs tabular-nums text-slate-500" />
                   </span>
                 </div>
 
@@ -130,11 +131,10 @@ export default async function DashboardPage() {
                       const outbound = message.direction === "outbound";
                       return (
                         <li key={message.id} className="relative flex gap-3 pb-3 last:pb-0">
-                          <span className="w-20 shrink-0 pt-0.5 text-xs tabular-nums text-slate-400">
-                            {new Date(message.received_at).toLocaleDateString(undefined, {
-                              day: "numeric", month: "short",
-                            })}
-                          </span>
+                          <LocalTime
+                            iso={message.received_at}
+                            className="w-28 shrink-0 pt-0.5 text-xs tabular-nums text-slate-400"
+                          />
                           <span
                             className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
                               outbound ? "bg-slate-300" : "bg-slate-900"

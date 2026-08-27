@@ -186,7 +186,14 @@ by HMAC signature, not a session.
 endpoint cannot enumerate registered addresses. The real outcome is an empty
 `identities` array. Sign-in can also return no error *and* no session.
 
-**8. Do not diagnose from an absence.** Four times in this build, in-flight work was
+**8. Never format a timestamp in a server component.** Server components render
+in the server's timezone — UTC on Vercel — so `toLocaleString()` there shows the
+wrong wall-clock time to every reader. Use `<LocalTime>` from
+`src/components/local-time.tsx`, which renders a timezone-independent UTC fallback
+on the server *and* on the first client render (so hydration cannot mismatch), then
+swaps to the reader's local time in an effect.
+
+**9. Do not diagnose from an absence.** Four times in this build, in-flight work was
 declared broken because a check ran too early. "Not yet" and "never" are the same
 observation. Consult the authority — Mailgun's event stream, the token ledger,
 `email_confirmed_at` — rather than polling and inferring.
@@ -217,7 +224,7 @@ observation. Consult the authority — Mailgun's event stream, the token ledger,
 8. **Sender history is split** into same-address ("this person") and same-domain
    ("others at this company"). Merging them would imply a relationship with someone
    who has never written.
-9. **Never let the model claim something is unknown when the database knows it.**
+10. **Never let the model claim something is unknown when the database knows it.**
    Any context the CRM holds and the prompt omits will eventually surface as a
    confident false statement in reasoning the owner is showing to someone.
 

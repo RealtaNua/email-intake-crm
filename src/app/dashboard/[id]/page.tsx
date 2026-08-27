@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { reprocessContact, logReply, saveRemarks } from "../actions";
+import { LocalTime } from "@/components/local-time";
 import {
   PRIORITY_STYLES, CONVERSATION_LABELS, CONVERSATION_STYLES,
   type Contact, type Company, type Enquiry,
@@ -72,8 +73,8 @@ export default async function ContactPage({
             </span>
           ) : null}
           <span className="text-slate-400">
-            {enquiries.length} {enquiries.length === 1 ? "enquiry" : "enquiries"} · first contact{" "}
-            {new Date(contact.first_seen_at).toLocaleDateString()}
+            {enquiries.length} {enquiries.length === 1 ? "message" : "messages"} · first contact{" "}
+            <LocalTime iso={contact.first_seen_at} variant="date" />
           </span>
         </div>
       </header>
@@ -199,7 +200,7 @@ export default async function ContactPage({
               <li key={i} className="rounded-lg border border-slate-200 p-3">
                 <p className="text-sm text-slate-700">{note.text}</p>
                 <p className="mt-1 text-xs text-slate-400">
-                  {new Date(note.created_at).toLocaleString()}
+                  <LocalTime iso={note.created_at} />
                   {note.source ? ` · ${note.source}` : ""}
                 </p>
               </li>
@@ -216,7 +217,7 @@ export default async function ContactPage({
       <section className="mt-8">
         <h2 className="text-sm font-medium text-slate-900">Conversation</h2>
         <p className="mt-1 text-xs text-slate-400">
-          Oldest first. Both directions.
+          Oldest first, both directions. Times shown in your timezone — hover for the full timestamp.
         </p>
 
         <ol className="mt-3 space-y-3 border-l border-slate-200 pl-4">
@@ -246,12 +247,7 @@ export default async function ContactPage({
                             {message.priority}
                           </span>
                         ) : null}
-                        <time className="text-xs tabular-nums text-slate-400">
-                          {new Date(message.received_at).toLocaleString(undefined, {
-                            day: "numeric", month: "short", year: "numeric",
-                            hour: "2-digit", minute: "2-digit",
-                          })}
-                        </time>
+                        <LocalTime iso={message.received_at} className="text-xs tabular-nums text-slate-400" />
                       </span>
                     </div>
 
