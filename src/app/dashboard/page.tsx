@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import type { Enquiry } from "@/lib/types";
@@ -219,9 +220,12 @@ export default async function DashboardPage() {
               className="rounded-xl border border-slate-200 bg-white p-5 transition-colors hover:border-slate-300"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                <p className="font-medium text-slate-900">
+                <Link
+                  href={`/dashboard/${enquiry.id}`}
+                  className="font-medium text-slate-900 hover:underline"
+                >
                   {enquiry.subject || <span className="text-slate-400">(no subject)</span>}
-                </p>
+                </Link>
                 <span className="flex shrink-0 items-center gap-2">
                 <PriorityPanel enquiry={enquiry} />
                 <time

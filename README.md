@@ -36,8 +36,8 @@ returns 200. Enrichment happens off the request path.
 - [x] 3. Bare dashboard listing rows
 - [x] 4. Company-domain enrichment (Claude + web search)
 - [x] 5. Priority classification (Claude)
-- [ ] 6. Supabase Auth (Google + email/password, sign-up and sign-in)
-- [ ] 7. Per-enquiry detail view, sender history
+- [x] 6. Supabase Auth (Google + email/password, sign-up and sign-in)
+- [x] 7. Per-enquiry detail view, sender history
 - [ ] 8. Chat-based record updates
 - [x] 9. Rate limit / daily cap on the public webhook — *pulled forward to step 4*
 
@@ -150,12 +150,58 @@ showed `accepted → accepted → delivered 200 OK`) rather than infer from an a
   statement and fails closed. Measured cost is roughly \$0.15-0.25 per enriched enquiry
   at medium effort; a full-effort run measured \$0.54, almost entirely from web search
   results being fed back into context.
+- **Email confirmation is disabled.** Sign-up logs the user straight in. The
+  correct fix is custom SMTP (Mailgun) configured in Supabase Auth settings;
+  the built-in email service is not usable for this.
 - **Priority quality depends on `src/lib/business-context.ts`.** That file describes what
   a valuable enquiry looks like for this specific business. It is the difference between
   real triage and a keyword rule, and it should be edited to match reality.
 - **Every push to `main` deploys to production.** The GitHub repo is connected to the
   Vercel project, so a broken commit goes live. `npm run build` passing locally is the
   gate before each commit.
+
+### 8. Login hung forever with no error anywhere
+
+Both Google OAuth and email/password sign-in left the button on "Working…"
+indefinitely. No error in the UI, no console error, no failed network request.
+
+**Cause:** the Supabase browser client read its config through a helper doing
+`process.env[name]`. Next.js only substitutes `NEXT_PUBLIC_*` into client
+bundles when it can see the *static* property access at build time, so the
+browser received `undefined`, the helper threw, and the rejected promise left
+the loading flag set. The same helper worked correctly on the server, which is
+why nothing looked wrong until it ran in a browser.
+
+**How it was found:** the two login methods share almost no code — different
+providers, different endpoints — but failed identically, which pointed at the
+one thing they had in common. Grepping the build output confirmed it: the
+Supabase URL was present in `.next/server/edge` and absent from `.next/static`.
+
+**Fix:** static `process.env.NEXT_PUBLIC_X` literals in the browser client,
+plus `try/catch` in the login handlers so a thrown error reaches the UI instead
+of leaving a button spinning with nothing to explain it.
+
+### 9. Sign-in silently did nothing for unconfirmed accounts
+
+After signing up, signing in threw no error and appeared to do nothing.
+
+**Cause:** two separate silent paths. `signInWithPassword` returned no error
+but no session, and the code fell through to a redirect that middleware
+immediately bounced back. Separately, `signUp` with an existing email returns
+success by design — Supabase does this so the endpoint cannot be used to
+discover which addresses are registered — signalling the real outcome only via
+an empty `identities` array.
+
+**Fix:** both cases now produce an explicit message.
+
+### 10. Confirmation emails never arrived
+
+**Cause:** not a misconfiguration. Supabase's built-in email service is
+rate-limited to a few messages per hour on the free tier and is explicitly not
+intended for production use.
+
+**Fix:** email confirmation disabled for the demo. Custom SMTP via Mailgun is
+the proper fix and is listed under known limitations.
 
 ## Local development
 
