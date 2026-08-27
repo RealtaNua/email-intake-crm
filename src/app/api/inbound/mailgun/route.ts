@@ -1,12 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseFromHeader, verifyMailgunSignature } from "@/lib/mailgun";
 import { requireEnv } from "@/lib/env";
+import { enrichEnquiry } from "@/lib/enrichment";
 
 // node:crypto and the service_role key both require the Node runtime.
 export const runtime = "nodejs";
 // Never cache an inbound webhook.
 export const dynamic = "force-dynamic";
+// Enrichment runs in after() and keeps this invocation alive. A Claude call
+// with web search takes 30-90s, well past the platform default. Hobby with
+// Fluid compute allows up to 300s.
+export const maxDuration = 300;
 
 /**
  * Mailgun inbound route target.
@@ -96,6 +101,13 @@ export async function POST(request: Request) {
   }
 
   console.log("[inbound] stored enquiry", data.id, "from", senderEmail);
+
+  // Enrichment runs after the response is sent. Mailgun gets its 200 straight
+  // away and does not retry; the Claude calls happen on borrowed time.
+  after(async () => {
+    await enrichEnquiry(data.id);
+  });
+
   return NextResponse.json({ ok: true, id: data.id }, { status: 200 });
 }
 

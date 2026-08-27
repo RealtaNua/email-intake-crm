@@ -14,6 +14,87 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+/** Renders whatever enrichment produced — including the honest failure states. */
+function CompanyPanel({ enquiry }: { enquiry: Enquiry }) {
+  const profile = enquiry.company_profile;
+
+  if (enquiry.enrichment_status === "pending") {
+    return <p className="mt-3 text-xs text-slate-400">Researching company…</p>;
+  }
+  if (enquiry.enrichment_status === "skipped_personal_domain") {
+    return (
+      <p className="mt-3 text-xs text-slate-400">
+        Personal email domain — no company to research.
+      </p>
+    );
+  }
+  if (enquiry.enrichment_status === "capped") {
+    return (
+      <p className="mt-3 text-xs text-amber-700">
+        Daily research limit reached — not enriched.
+      </p>
+    );
+  }
+  if (enquiry.enrichment_status === "failed") {
+    return (
+      <p className="mt-3 text-xs text-red-700">
+        Research failed{enquiry.enrichment_error ? `: ${enquiry.enrichment_error}` : ""}
+      </p>
+    );
+  }
+  if (!profile) return null;
+
+  const confidenceStyle =
+    profile.confidence === "high"
+      ? "bg-emerald-50 text-emerald-800"
+      : profile.confidence === "medium"
+        ? "bg-amber-50 text-amber-800"
+        : "bg-slate-100 text-slate-600";
+
+  return (
+    <div className="mt-4 rounded-lg bg-slate-50 p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-medium text-slate-900">{profile.company_name}</p>
+        <span className={`rounded px-1.5 py-0.5 text-xs ${confidenceStyle}`}>
+          {profile.confidence} confidence
+        </span>
+      </div>
+
+      <p className="mt-1.5 text-sm text-slate-700">{profile.what_they_do}</p>
+
+      <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600">
+        {profile.industry ? (
+          <div><dt className="inline text-slate-400">Industry: </dt><dd className="inline">{profile.industry}</dd></div>
+        ) : null}
+        {profile.size_estimate ? (
+          <div><dt className="inline text-slate-400">Size: </dt><dd className="inline">{profile.size_estimate}</dd></div>
+        ) : null}
+        {profile.location ? (
+          <div><dt className="inline text-slate-400">Location: </dt><dd className="inline">{profile.location}</dd></div>
+        ) : null}
+      </dl>
+
+      {profile.recent_news?.length ? (
+        <ul className="mt-3 space-y-1.5 border-t border-slate-200 pt-3">
+          {profile.recent_news.map((item, i) => (
+            <li key={i} className="text-xs text-slate-600">
+              <span className="text-slate-900">{item.headline}</span>
+              {item.date ? <span className="text-slate-400"> · {item.date}</span> : null}
+              <span className="block text-slate-500">{item.why_it_matters}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {profile.sources?.length ? (
+        <p className="mt-3 text-xs text-slate-400">
+          {profile.sources.length} source{profile.sources.length === 1 ? "" : "s"}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export default async function DashboardPage() {
   // Read server-side with the service_role key. RLS is on with no policies,
   // so the anon key would return an empty array here. Auth arrives at step 6
@@ -97,6 +178,8 @@ export default async function DashboardPage() {
                   {enquiry.body_plain}
                 </p>
               ) : null}
+
+              <CompanyPanel enquiry={enquiry} />
             </li>
           ))}
         </ul>

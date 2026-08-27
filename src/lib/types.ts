@@ -1,3 +1,5 @@
+import type { CompanyProfile } from "@/lib/enrichment";
+
 export type Enquiry = {
   id: string;
   received_at: string;
@@ -10,4 +12,8 @@ export type Enquiry = {
   body_plain: string | null;
   body_html: string | null;
   status: string;
+  company_profile: CompanyProfile | null;
+  enrichment_status: string;
+  enrichment_error: string | null;
+  enriched_at: string | null;
 };
