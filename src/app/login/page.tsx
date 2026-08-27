@@ -24,6 +24,10 @@ function LoginForm() {
     setError(null);
     setNotice(null);
 
+    // Everything below is wrapped so that a thrown error surfaces in the UI.
+    // Without this, an exception leaves busy=true and the button spins
+    // forever with nothing to tell the user what went wrong.
+    try {
     const supabase = createClient();
 
     if (mode === "signup") {
@@ -54,21 +58,30 @@ function LoginForm() {
     if (error) return setError(error.message);
     router.push(next);
     router.refresh();
+    } catch (err) {
+      setBusy(false);
+      setError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   async function handleGoogle() {
     setBusy(true);
     setError(null);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
-      },
-    });
-    if (error) {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        },
+      });
+      if (error) {
+        setBusy(false);
+        setError(error.message);
+      }
+    } catch (err) {
       setBusy(false);
-      setError(error.message);
+      setError(err instanceof Error ? err.message : String(err));
     }
   }
 
