@@ -7,8 +7,9 @@ import { StatTile } from "@/components/stat-tile";
 import { Badge, PRIORITY_TONE, CONVERSATION_TONE } from "@/components/badge";
 import {
   CONVERSATION_LABELS,
+  PRIORITY_LABELS,
+  attentionLevel,
   ballInOurCourt,
-  currentPriority,
   type ContactWithRelations,
   type MessageState,
 } from "@/lib/types";
@@ -71,7 +72,9 @@ export default async function DashboardPage() {
   }
 
   const waitingOnUs = states.filter((c) => ballInOurCourt(c, messagesByContact.get(c.id) ?? [])).length;
-  const urgent = states.filter((c) => currentPriority(messagesByContact.get(c.id) ?? []) === "urgent").length;
+  const attention = states.map((c) => attentionLevel(c, messagesByContact.get(c.id) ?? []));
+  const urgent = attention.filter((level) => level === "urgent").length;
+  const highPriority = attention.filter((level) => level === "high").length;
   const messages = allMessages.length;
 
   return (
@@ -85,10 +88,16 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatTile label="Contacts" value={states.length} accent="brand" />
         <StatTile label="Waiting on us" value={waitingOnUs} accent="amber" hint="Ball in our court" />
-        <StatTile label="Urgent" value={urgent} accent="red" hint="Latest message rated urgent" />
+        <StatTile label="Urgent" value={urgent} accent="red" hint="Needs a reply today" />
+        <StatTile
+          label="High priority"
+          value={highPriority}
+          accent="orange"
+          hint="Important, not due today"
+        />
         <StatTile label="Messages" value={messages} accent="slate" hint="Both directions" />
       </div>
 
@@ -102,7 +111,9 @@ export default async function DashboardPage() {
       ) : (
         <ul className="mt-6 space-y-4">
           {contacts.map((contact) => {
-            const priority = currentPriority(contact.enquiries ?? []);
+            // The badge is the same judgement the tiles count, so the two can
+            // never disagree about what a contact needs.
+            const priority = attentionLevel(contact, contact.enquiries ?? []);
             const profile = contact.companies?.profile ?? null;
             const count = contact.enquiries?.length ?? 0;
 
@@ -127,7 +138,7 @@ export default async function DashboardPage() {
                     ) : null}
                     {priority ? (
                       <Badge tone={PRIORITY_TONE[priority] ?? "slate"} uppercase>
-                        {priority}
+                        {PRIORITY_LABELS[priority] ?? priority}
                       </Badge>
                     ) : null}
                     <LocalTime
@@ -199,7 +210,7 @@ export default async function DashboardPage() {
 
                 <NextStep
                   text={contact.next_step}
-                  urgent={ballInOurCourt(contact, contact.enquiries ?? []) && priority === "urgent"}
+                  urgent={priority === "urgent"}
                   className="mt-4"
                 />
 

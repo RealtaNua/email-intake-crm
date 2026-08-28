@@ -8,8 +8,7 @@ import { NextStep } from "@/components/next-step";
 import { Badge, PRIORITY_TONE, CONVERSATION_TONE } from "@/components/badge";
 import {
   CONVERSATION_LABELS,
-  ballInOurCourt,
-  currentPriority,
+  attentionLevel,
   type Contact,
   type Company,
   type Enquiry,
@@ -99,10 +98,7 @@ export default async function ContactPage({
           </div>
           <NextStep
             text={contact.next_step}
-            urgent={
-              ballInOurCourt(contact, enquiries) &&
-              currentPriority(enquiries) === "urgent"
-            }
+            urgent={attentionLevel(contact, enquiries) === "urgent"}
             className="mt-3"
           />
         </section>

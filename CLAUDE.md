@@ -127,8 +127,11 @@ Each cost real time. Full write-ups in `TROUBLESHOOTING.md`.
     after the message was answered; "waiting on us" read straight off
     `conversation_status` counted an unclassified new enquiry as handled. Both
     dimensions live in the messages — use `currentPriority()` and
-    `ballInOurCourt()`, and drive the badges from the same helpers so a total and
-    the list under it cannot disagree.
+    `ballInOurCourt()`. **Urgent and "waiting on us" are not the same axis** — a
+    thread rated urgent that is waiting on *them* is not on fire on our end.
+    `attentionLevel()` combines the two into what the badge should actually say
+    (`urgent`, `high`, or the plain rating); drive every badge and tile from it so
+    a total and the list under it cannot disagree.
 13. **Do not diagnose from an absence.** Four times in this build, in-flight work was
     declared broken because a check ran too early. "Not yet" and "never" are the same
     observation. Consult the authority — Mailgun's event stream, the call log,
@@ -228,14 +231,21 @@ copy-pasted across three files and were already drifting before `Badge` existed.
 ### Colour carries meaning — keep it scarce
 
 - **Red** = urgent, *and* the ball is in our court. Nothing else.
+- **Orange** = high priority: rated urgent, but waiting on them, so nothing is due
+  from us today. Worth watching, not worth panicking over.
 - **Amber** = pending, waiting on us, at the cap.
 - **Sky** = normal priority, scheduled.
 - **Emerald** = money received, won, active client.
 - **Violet** = the brand, and neutral metadata like "has remarks".
 - **Slate** = low priority, closed, anything inert.
 
-`NextStep` is red only when urgent *and* on us; amber otherwise. If everything pending
-were red, red would stop meaning anything.
+`NextStep` is red only when urgent *and* on us; amber otherwise. A thread rated
+urgent that is waiting on *them* is never red — there is nothing to reply to today,
+and marking it red would say there is. It surfaces as the orange "High priority"
+badge and tile instead. `attentionLevel()` in `src/lib/types.ts` makes that call;
+use it (and its badge label, `PRIORITY_LABELS`) rather than reading `priority`
+off an enquiry directly. If everything pending were red, red would stop meaning
+anything.
 
 ### Rules
 

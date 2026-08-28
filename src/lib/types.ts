@@ -87,6 +87,14 @@ export type ContactWithRelations = Contact & {
   >[];
 };
 
+/** How a rating is written where it stands on its own, as a contact's badge. */
+export const PRIORITY_LABELS: Record<string, string> = {
+  urgent: "Urgent",
+  high: "High priority",
+  normal: "Normal",
+  low: "Low",
+};
+
 export const PRIORITY_STYLES: Record<string, string> = {
   urgent: "bg-red-100 text-red-900 ring-red-200",
   high: "bg-orange-100 text-orange-900 ring-orange-200",
@@ -142,4 +150,24 @@ export function ballInOurCourt(
     if (!latest || +new Date(m.received_at) > +new Date(latest.received_at)) latest = m;
   }
   return latest?.direction === "inbound";
+}
+
+/**
+ * What a contact needs from us: the rating of their latest message and whose
+ * turn it is, judged together.
+ *
+ * A thread rated urgent that is waiting on THEM is not urgent for us — there is
+ * nothing to reply to today, and marking it red says there is. It is still the
+ * most important kind of thing to keep an eye on, so it reads as high priority
+ * rather than being flattened in with everything else.
+ *
+ * So `urgent` here means exactly one thing: rated urgent and on our desk.
+ */
+export function attentionLevel(
+  contact: { conversation_status: string | null },
+  messages: MessageState[],
+): string | null {
+  const priority = currentPriority(messages);
+  if (priority === "urgent" && !ballInOurCourt(contact, messages)) return "high";
+  return priority;
 }
