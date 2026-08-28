@@ -77,6 +77,21 @@ export default async function DashboardPage() {
   const highPriority = attention.filter((level) => level === "high").length;
   const messages = allMessages.length;
 
+  // Every outstanding next step, in one place, split by whose turn it is —
+  // the same judgement the badges below use, so this panel and the list it
+  // links into can't disagree about who owes what.
+  const RANK: Record<string, number> = { urgent: 4, high: 3, normal: 2, low: 1 };
+  const outstanding = contacts
+    .filter((c) => c.next_step && c.next_step.trim().toLowerCase() !== "none")
+    .map((c) => ({
+      contact: c,
+      onUs: ballInOurCourt(c, c.enquiries ?? []),
+      level: attentionLevel(c, c.enquiries ?? []),
+    }))
+    .sort((a, b) => (RANK[b.level ?? ""] ?? 0) - (RANK[a.level ?? ""] ?? 0));
+  const pendingSteps = outstanding.filter((n) => n.onUs);
+  const waitingSteps = outstanding.filter((n) => !n.onUs);
+
   return (
     <>
       <div className="mb-6 flex items-end justify-between gap-4">
@@ -101,6 +116,83 @@ export default async function DashboardPage() {
         <StatTile label="Messages" value={messages} accent="slate" hint="Both directions" />
       </div>
 
+      {outstanding.length > 0 ? (
+        <section className="card mt-4 p-6">
+          <h2 className="text-sm font-semibold text-ink">Next steps</h2>
+          <div className="mt-3 grid gap-x-8 gap-y-5 sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                Pending your reply · {pendingSteps.length}
+              </p>
+              {pendingSteps.length ? (
+                <ul className="mt-2 space-y-0.5">
+                  {pendingSteps.map(({ contact, level }) => (
+                    <li key={contact.id}>
+                      <a
+                        href={`#contact-${contact.id}`}
+                        title={contact.next_step ?? undefined}
+                        className="-mx-2 flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50"
+                      >
+                        <span
+                          className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                            level === "urgent" ? "bg-red-500" : "bg-amber-500"
+                          }`}
+                          aria-hidden="true"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-ink">
+                            {contact.name || contact.email}
+                          </span>
+                          <span className="block truncate text-xs text-ink-muted">
+                            {contact.next_step}
+                          </span>
+                        </span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-xs text-ink-muted">Nothing outstanding.</p>
+              )}
+            </div>
+
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+                Waiting on them · {waitingSteps.length}
+              </p>
+              {waitingSteps.length ? (
+                <ul className="mt-2 space-y-0.5">
+                  {waitingSteps.map(({ contact }) => (
+                    <li key={contact.id}>
+                      <a
+                        href={`#contact-${contact.id}`}
+                        title={contact.next_step ?? undefined}
+                        className="-mx-2 flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50"
+                      >
+                        <span
+                          className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300"
+                          aria-hidden="true"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-ink">
+                            {contact.name || contact.email}
+                          </span>
+                          <span className="block truncate text-xs text-ink-muted">
+                            {contact.next_step}
+                          </span>
+                        </span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-xs text-ink-muted">Nothing outstanding.</p>
+              )}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {contacts.length === 0 ? (
         <div className="card mt-6 px-6 py-16 text-center">
           <p className="font-medium text-ink">No contacts yet</p>
@@ -118,7 +210,11 @@ export default async function DashboardPage() {
             const count = contact.enquiries?.length ?? 0;
 
             return (
-              <li key={contact.id} className="card card-hover p-6">
+              <li
+                key={contact.id}
+                id={`contact-${contact.id}`}
+                className="card card-hover scroll-mt-6 p-6"
+              >
                 <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
                   <div className="min-w-0">
                     <Link
