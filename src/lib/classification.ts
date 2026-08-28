@@ -53,6 +53,8 @@ export const CLASSIFY_TOOL: Anthropic.Tool = {
           "ONE sentence describing what THIS message did, in past tense. It becomes a line " +
           "in a dated timeline, so it must stand alone and carry the specifics that matter " +
           "(names, figures, dates). Do not summarise the whole thread — only this message. " +
+          "Describe what the message said even when you believe it is a scam — never a " +
+          "verdict or an instruction like 'ignore' or 'spam'; suspected_phishing carries that. " +
           "Example: 'Confirmed L&D head Serene Ho as sponsor, accepted 12-14 March and " +
           "offered to raise a PO on receipt of the revised proposal.'",
       },
