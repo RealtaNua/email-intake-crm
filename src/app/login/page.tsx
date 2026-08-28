@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, Suspense } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -119,7 +120,7 @@ function LoginForm() {
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand to-brand-deep px-6 py-16">
       <div className="card w-full max-w-sm p-8">
       <div className="mb-6 flex items-center gap-2.5">
-        <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand/10 text-base text-brand">✉</span>
+        <Image src="/logo.png" alt="" width={36} height={36} className="h-9 w-9" />
         <span className="text-[15px] font-semibold tracking-tight text-ink">Intake&nbsp;CRM</span>
       </div>
       <h1 className="text-xl font-semibold tracking-tight text-ink">

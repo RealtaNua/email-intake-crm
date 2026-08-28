@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { NavLink } from "@/components/nav-link";
@@ -32,9 +33,7 @@ export default async function DashboardLayout({
         <header className="mx-auto max-w-5xl px-6 pt-5">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <Link href="/dashboard" className="flex items-center gap-2.5">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/15 text-base backdrop-blur">
-                ✉
-              </span>
+              <Image src="/logo.png" alt="" width={36} height={36} className="h-9 w-9" />
               <span className="text-[15px] font-semibold leading-tight tracking-tight text-white">
                 Intake&nbsp;CRM
               </span>
