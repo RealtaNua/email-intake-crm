@@ -16,7 +16,7 @@ type ContactJoin = {
   company_id?: string | null;
 };
 
-const CLASSIFY_TOOL: Anthropic.Tool = {
+export const CLASSIFY_TOOL: Anthropic.Tool = {
   name: "record_priority",
   description:
     "Record the triage decision for this message and the state of the whole " +
@@ -133,6 +133,42 @@ const RECORD_REPLY_TOOL: Anthropic.Tool = {
 };
 
 /**
+ * Assemble the user message for a classification call.
+ *
+ * Pure and exported so `scripts/dump-prompt.ts` can reproduce byte-for-byte
+ * what production sends, instead of a hand-copied approximation that drifts
+ * the first time this template changes.
+ *
+ * The message being processed goes LAST and delimited — gotcha 9. With the
+ * target at the top and long context after it, the model summarised the
+ * newest message instead of the one it was given.
+ */
+export function buildClassificationUserMessage(p: {
+  profileSection: string;
+  relationshipSection: string;
+  companySection: string;
+  threadSection: string;
+  isOutbound: boolean;
+  senderName: string | null;
+  senderEmail: string;
+  subject: string | null;
+  bodyPlain: string | null;
+}): string {
+  return (
+    `${p.profileSection}\n\n${p.relationshipSection}${p.companySection}\n\n` +
+    `EARLIER MESSAGES IN THIS THREAD (oldest first, background only)\n${p.threadSection}\n\n` +
+    `================ THE MESSAGE YOU ARE PROCESSING ================\n` +
+    `Direction: ${p.isOutbound ? "WE SENT THIS" : "THEY SENT THIS TO US"}\n` +
+    `From: ${p.senderName ?? "(no name)"} <${p.senderEmail}>\n` +
+    `Subject: ${p.subject ?? "(no subject)"}\n\n` +
+    `${(p.bodyPlain ?? "(empty body)").slice(0, 4000)}\n` +
+    `================ END OF THE MESSAGE ================\n\n` +
+    `Summarise THE MESSAGE ABOVE in one sentence — not the thread, and not ` +
+    `the most recent message. Everything before the delimiter is background.`
+  );
+}
+
+/**
  * Reject a value the model returned that is structurally a string but says
  * nothing — the literal word "ignore" for a summary, or a stray fragment of
  * markup ("</antmlifake>", seen on a real call).
@@ -156,7 +192,7 @@ function isDegenerate(value: string | null | undefined, allowNone = false): bool
   return text.length < 20;
 }
 
-const SYSTEM = `You triage inbound business enquiries for the business described below.
+export const SYSTEM = `You triage inbound business enquiries for the business described below.
 
 ${BUSINESS_CONTEXT}
 
@@ -364,16 +400,17 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
         {
           role: "user",
           content:
-            `${profileSection}\n\n${relationshipSection}${companySection}\n\n` +
-            `EARLIER MESSAGES IN THIS THREAD (oldest first, background only)\n${threadSection}\n\n` +
-            `================ THE MESSAGE YOU ARE PROCESSING ================\n` +
-            `Direction: ${isOutbound ? "WE SENT THIS" : "THEY SENT THIS TO US"}\n` +
-            `From: ${enquiry.sender_name ?? "(no name)"} <${enquiry.sender_email}>\n` +
-            `Subject: ${enquiry.subject ?? "(no subject)"}\n\n` +
-            `${(enquiry.body_plain ?? "(empty body)").slice(0, 4000)}\n` +
-            `================ END OF THE MESSAGE ================\n\n` +
-            `Summarise THE MESSAGE ABOVE in one sentence — not the thread, and not ` +
-            `the most recent message. Everything before the delimiter is background.`,
+            buildClassificationUserMessage({
+              profileSection,
+              relationshipSection,
+              companySection,
+              threadSection,
+              isOutbound,
+              senderName: enquiry.sender_name,
+              senderEmail: enquiry.sender_email,
+              subject: enquiry.subject,
+              bodyPlain: enquiry.body_plain,
+            }),
         },
       ],
       tools: [isOutbound ? RECORD_REPLY_TOOL : CLASSIFY_TOOL],
