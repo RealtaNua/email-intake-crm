@@ -53,15 +53,30 @@ export default async function DashboardLayout({
               >
                 ${spentToday.toFixed(2)} today
               </Link>
-              <form action="/auth/signout" method="post">
-                <button
-                  type="submit"
-                  title={`Signed in as ${user.email ?? ""} — sign out`}
-                  className="grid h-9 w-9 place-items-center rounded-full bg-white/20 text-sm font-semibold text-white backdrop-blur transition-colors hover:bg-white/30"
+              {/* The avatar used to double as a silent one-click sign-out
+                  button, with no visible menu and only a hover tooltip as a
+                  clue. A <details> dropdown makes "click profile to sign
+                  out" an actual, visible option instead of a hidden action —
+                  no client JS, <details> owns the open state. */}
+              <details className="group relative">
+                <summary
+                  title={`Signed in as ${user.email ?? ""}`}
+                  className="grid h-9 w-9 cursor-pointer list-none place-items-center rounded-full bg-white/20 text-sm font-semibold text-white backdrop-blur transition-colors hover:bg-white/30"
                 >
                   {initial}
-                </button>
-              </form>
+                </summary>
+                <div className="absolute right-0 top-full z-10 mt-2 w-52 overflow-hidden rounded-xl bg-surface py-1 shadow-lg ring-1 ring-black/5">
+                  <p className="truncate px-3 py-2 text-xs text-ink-muted">{user.email}</p>
+                  <form action="/auth/signout" method="post">
+                    <button
+                      type="submit"
+                      className="w-full px-3 py-2 text-left text-sm text-ink hover:bg-page"
+                    >
+                      Sign out
+                    </button>
+                  </form>
+                </div>
+              </details>
             </div>
           </div>
         </header>
