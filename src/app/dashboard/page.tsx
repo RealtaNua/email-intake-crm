@@ -16,6 +16,48 @@ import {
 
 export const dynamic = "force-dynamic";
 
+/** One group of next-step lines, each anchoring down to its contact's card. */
+function NextStepGroup({
+  label,
+  dotClassName,
+  items,
+}: {
+  label: string;
+  dotClassName: string;
+  items: { contact: ContactWithRelations }[];
+}) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
+        {label} · {items.length}
+      </p>
+      {items.length ? (
+        <ul className="mt-2 space-y-0.5">
+          {items.map(({ contact }) => (
+            <li key={contact.id}>
+              <a
+                href={`#contact-${contact.id}`}
+                title={contact.next_step ?? undefined}
+                className="-mx-2 flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50"
+              >
+                <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${dotClassName}`} aria-hidden="true" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-ink">
+                    {contact.name || contact.email}
+                  </span>
+                  <span className="block truncate text-xs text-ink-muted">{contact.next_step}</span>
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-xs text-ink-muted">Nothing outstanding.</p>
+      )}
+    </div>
+  );
+}
+
 export default async function DashboardPage() {
   const supabase = await createServerSupabase();
 
@@ -89,8 +131,9 @@ export default async function DashboardPage() {
       level: attentionLevel(c, c.enquiries ?? []),
     }))
     .sort((a, b) => (RANK[b.level ?? ""] ?? 0) - (RANK[a.level ?? ""] ?? 0));
-  const pendingSteps = outstanding.filter((n) => n.onUs);
-  const waitingSteps = outstanding.filter((n) => !n.onUs);
+  const urgentSteps = outstanding.filter((n) => n.onUs && n.level === "urgent");
+  const waitingOnUsSteps = outstanding.filter((n) => n.onUs && n.level !== "urgent");
+  const waitingOnThemSteps = outstanding.filter((n) => !n.onUs);
 
   return (
     <>
@@ -120,75 +163,9 @@ export default async function DashboardPage() {
         <section className="card mt-4 p-6">
           <h2 className="text-base font-semibold text-ink">Next steps</h2>
           <div className="mt-3 space-y-5">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-                Urgent · {pendingSteps.length}
-              </p>
-              {pendingSteps.length ? (
-                <ul className="mt-2 space-y-0.5">
-                  {pendingSteps.map(({ contact, level }) => (
-                    <li key={contact.id}>
-                      <a
-                        href={`#contact-${contact.id}`}
-                        title={contact.next_step ?? undefined}
-                        className="-mx-2 flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50"
-                      >
-                        <span
-                          className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
-                            level === "urgent" ? "bg-red-500" : "bg-amber-500"
-                          }`}
-                          aria-hidden="true"
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium text-ink">
-                            {contact.name || contact.email}
-                          </span>
-                          <span className="block truncate text-xs text-ink-muted">
-                            {contact.next_step}
-                          </span>
-                        </span>
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-2 text-xs text-ink-muted">Nothing outstanding.</p>
-              )}
-            </div>
-
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-                Waiting on them · {waitingSteps.length}
-              </p>
-              {waitingSteps.length ? (
-                <ul className="mt-2 space-y-0.5">
-                  {waitingSteps.map(({ contact }) => (
-                    <li key={contact.id}>
-                      <a
-                        href={`#contact-${contact.id}`}
-                        title={contact.next_step ?? undefined}
-                        className="-mx-2 flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50"
-                      >
-                        <span
-                          className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300"
-                          aria-hidden="true"
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium text-ink">
-                            {contact.name || contact.email}
-                          </span>
-                          <span className="block truncate text-xs text-ink-muted">
-                            {contact.next_step}
-                          </span>
-                        </span>
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-2 text-xs text-ink-muted">Nothing outstanding.</p>
-              )}
-            </div>
+            <NextStepGroup label="Urgent" dotClassName="bg-red-500" items={urgentSteps} />
+            <NextStepGroup label="Waiting on us" dotClassName="bg-amber-500" items={waitingOnUsSteps} />
+            <NextStepGroup label="Waiting on them" dotClassName="bg-slate-300" items={waitingOnThemSteps} />
           </div>
         </section>
       ) : null}
