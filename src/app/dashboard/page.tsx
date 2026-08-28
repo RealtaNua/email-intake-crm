@@ -5,7 +5,13 @@ import { MessageView } from "@/components/message-view";
 import { NextStep } from "@/components/next-step";
 import { StatTile } from "@/components/stat-tile";
 import { Badge, PRIORITY_TONE, CONVERSATION_TONE } from "@/components/badge";
-import { CONVERSATION_LABELS, topPriority, type ContactWithRelations } from "@/lib/types";
+import {
+  CONVERSATION_LABELS,
+  ballInOurCourt,
+  currentPriority,
+  type ContactWithRelations,
+  type MessageState,
+} from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -33,9 +39,40 @@ export default async function DashboardPage() {
 
   const contacts = (data ?? []) as unknown as ContactWithRelations[];
 
-  const waitingOnUs = contacts.filter((c) => c.conversation_status === "awaiting_our_reply").length;
-  const urgent = contacts.filter((c) => topPriority(c.enquiries ?? []) === "urgent").length;
-  const messages = contacts.reduce((sum, c) => sum + (c.enquiries?.length ?? 0), 0);
+  // The tiles count the table, not this page. The list above is capped at 100
+  // contacts, and a message whose sender could not be resolved hangs off no
+  // contact at all, so adding up what was rendered under-reports both totals.
+  // Both reads below are narrow — a few columns, no bodies, no joins.
+  const [{ data: stateRows }, { data: messageRows }] = await Promise.all([
+    supabase.from("contacts").select("id, conversation_status"),
+    supabase.from("enquiries").select("contact_id, direction, priority, received_at"),
+  ]);
+
+  // If either read fails, fall back to the contacts already in hand rather than
+  // showing a zero that reads as "nothing here" instead of "could not count".
+  const states = stateRows ?? contacts.map((c) => ({ id: c.id, conversation_status: c.conversation_status }));
+  const allMessages =
+    messageRows ??
+    contacts.flatMap((c) =>
+      (c.enquiries ?? []).map((e) => ({
+        contact_id: c.id,
+        direction: e.direction,
+        priority: e.priority,
+        received_at: e.received_at,
+      })),
+    );
+
+  const messagesByContact = new Map<string, MessageState[]>();
+  for (const m of allMessages) {
+    if (!m.contact_id) continue;
+    const forContact = messagesByContact.get(m.contact_id) ?? [];
+    forContact.push(m);
+    messagesByContact.set(m.contact_id, forContact);
+  }
+
+  const waitingOnUs = states.filter((c) => ballInOurCourt(c, messagesByContact.get(c.id) ?? [])).length;
+  const urgent = states.filter((c) => currentPriority(messagesByContact.get(c.id) ?? []) === "urgent").length;
+  const messages = allMessages.length;
 
   return (
     <>
@@ -49,9 +86,9 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile label="Contacts" value={contacts.length} accent="brand" />
+        <StatTile label="Contacts" value={states.length} accent="brand" />
         <StatTile label="Waiting on us" value={waitingOnUs} accent="amber" hint="Ball in our court" />
-        <StatTile label="Urgent" value={urgent} accent="red" hint="Needs a reply today" />
+        <StatTile label="Urgent" value={urgent} accent="red" hint="Latest message rated urgent" />
         <StatTile label="Messages" value={messages} accent="slate" hint="Both directions" />
       </div>
 
@@ -65,7 +102,7 @@ export default async function DashboardPage() {
       ) : (
         <ul className="mt-6 space-y-4">
           {contacts.map((contact) => {
-            const priority = topPriority(contact.enquiries ?? []);
+            const priority = currentPriority(contact.enquiries ?? []);
             const profile = contact.companies?.profile ?? null;
             const count = contact.enquiries?.length ?? 0;
 
@@ -162,7 +199,7 @@ export default async function DashboardPage() {
 
                 <NextStep
                   text={contact.next_step}
-                  urgent={contact.conversation_status === "awaiting_our_reply" && priority === "urgent"}
+                  urgent={ballInOurCourt(contact, contact.enquiries ?? []) && priority === "urgent"}
                   className="mt-4"
                 />
 

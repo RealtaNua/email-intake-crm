@@ -121,7 +121,15 @@ Each cost real time. Full write-ups in `TROUBLESHOOTING.md`.
 11. **Never let the model claim something is unknown when the database knows it.**
     Any context the CRM holds and the prompt omits will surface as a confident false
     statement in reasoning the owner is showing someone.
-12. **Do not diagnose from an absence.** Four times in this build, in-flight work was
+12. **A dashboard number must be computed from the rows it describes.** Not from
+    the page that happened to be fetched, and not from a column a model writes
+    later. "Urgent" taken as the worst rating in a whole thread kept contacts red
+    after the message was answered; "waiting on us" read straight off
+    `conversation_status` counted an unclassified new enquiry as handled. Both
+    dimensions live in the messages — use `currentPriority()` and
+    `ballInOurCourt()`, and drive the badges from the same helpers so a total and
+    the list under it cannot disagree.
+13. **Do not diagnose from an absence.** Four times in this build, in-flight work was
     declared broken because a check ran too early. "Not yet" and "never" are the same
     observation. Consult the authority — Mailgun's event stream, the call log,
     `email_confirmed_at` — rather than polling and inferring.

@@ -94,16 +94,52 @@ export const PRIORITY_STYLES: Record<string, string> = {
   low: "bg-slate-100 text-slate-600 ring-slate-200",
 };
 
-const PRIORITY_RANK: Record<string, number> = { urgent: 4, high: 3, normal: 2, low: 1 };
+/** The shape the tiles and badges need from a message to judge a contact. */
+export type MessageState = {
+  direction: string;
+  priority: string | null;
+  received_at: string;
+};
 
-/** The most urgent rating across a contact's enquiries drives the list badge. */
-export function topPriority(
-  enquiries: { priority: string | null }[],
-): string | null {
-  let best: string | null = null;
-  for (const e of enquiries) {
-    if (!e.priority) continue;
-    if (!best || (PRIORITY_RANK[e.priority] ?? 0) > (PRIORITY_RANK[best] ?? 0)) best = e.priority;
+/**
+ * The rating on the latest message they sent us.
+ *
+ * Priority judges a message, not a person, so a contact's badge has to be the
+ * rating of whatever is actually on our plate now. Taking the highest rating
+ * across the whole thread left a contact marked urgent forever, long after the
+ * message that earned it had been answered.
+ *
+ * Our own replies carry no rating, so they are skipped rather than counted as
+ * an absence of urgency.
+ */
+export function currentPriority(messages: MessageState[]): string | null {
+  let latest: MessageState | null = null;
+  for (const m of messages) {
+    if (m.direction === "outbound" || !m.priority) continue;
+    if (!latest || +new Date(m.received_at) > +new Date(latest.received_at)) latest = m;
   }
-  return best;
+  return latest?.priority ?? null;
+}
+
+/**
+ * Whether we owe this contact a reply.
+ *
+ * The classifier's verdict wins when it has one. Until then — a message that
+ * has only just landed, or one classification could not finish — the messages
+ * themselves still say whose turn it is, and an unanswered inbound email is
+ * ours. Reading the column alone reported "0 waiting on us" with a fresh
+ * enquiry sitting unread.
+ */
+export function ballInOurCourt(
+  contact: { conversation_status: string | null },
+  messages: MessageState[],
+): boolean {
+  if (contact.conversation_status) {
+    return contact.conversation_status === "awaiting_our_reply";
+  }
+  let latest: MessageState | null = null;
+  for (const m of messages) {
+    if (!latest || +new Date(m.received_at) > +new Date(latest.received_at)) latest = m;
+  }
+  return latest?.direction === "inbound";
 }

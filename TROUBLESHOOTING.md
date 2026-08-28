@@ -426,6 +426,47 @@ setting the developer does not use will not surface through normal testing, and
 
 ---
 
+## 12. Summary tiles that did not count the messages
+
+**Symptom** — Reported by the owner from the dashboard: the four headline numbers did
+not match the records underneath them. A contact whose state read **"Waiting on them"**
+was being counted under **URGENT — "needs a reply today."**
+
+**Cause** — three separate ways of not counting the thing being described.
+
+1. **The counts were of the page, not the table.** `Contacts` was the length of a
+   query capped at `.limit(100)`, and `Messages` was the sum of the enquiries embedded
+   in those rows. A message whose sender never resolved to a contact hangs off no
+   contact at all, so it was invisible to a total that claimed to cover "both
+   directions".
+2. **`Urgent` used the highest rating in the whole thread.** `topPriority()` took the
+   maximum across every message a contact had ever sent, so one urgent enquiry marked
+   that contact urgent permanently — including after it had been answered and the
+   conversation had moved on. That is what put an URGENT badge next to "Waiting on
+   them".
+3. **`Waiting on us` read only `conversation_status`.** That column is written by
+   classification, so an enquiry that has just landed, or one whose classification did
+   not finish, has `null` there and was silently counted as *not* waiting — the tile
+   read `0` while the message sat unanswered.
+
+**Fix** — both dimensions now come from the message rows. `currentPriority()` takes
+the rating of the **latest inbound** message rather than the worst one ever received,
+and `ballInOurCourt()` trusts `conversation_status` when it is set and falls back to
+the direction of the newest message when it is not. The tiles count the tables
+directly instead of what the list happened to render, and the same two helpers drive
+the list badges, so a number and the rows below it cannot disagree.
+
+The `URGENT` hint changed from "Needs a reply today" to "Latest message rated urgent",
+because that is what it counts. Whether the ball is in our court is already carried by
+the tile next to it, and by `NextStep`, which is red only when both are true.
+
+**Lesson** — a summary is a claim about the underlying rows, and it has to be computed
+from them. Each of these three shortcuts was cheaper than the real query and each drifted
+the moment the data grew past the case it was written on. A stale aggregate is worse than
+no aggregate: nobody double-checks a number that already looks plausible.
+
+---
+
 ## What these have in common
 
 Entries 6 and 7 are the same mistake twice:
