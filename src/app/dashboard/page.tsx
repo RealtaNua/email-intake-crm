@@ -131,9 +131,14 @@ export default async function DashboardPage() {
       level: attentionLevel(c, c.enquiries ?? []),
     }))
     .sort((a, b) => (RANK[b.level ?? ""] ?? 0) - (RANK[a.level ?? ""] ?? 0));
+  // Low priority is pulled out ahead of the on-us/on-them split — "ignore, or
+  // send a one-line decline" isn't really waiting on either side, and lumping
+  // it into "Waiting on them" made a courtesy-reply-or-skip case look like a
+  // live conversation sitting with the other party.
   const urgentSteps = outstanding.filter((n) => n.onUs && n.level === "urgent");
-  const waitingOnUsSteps = outstanding.filter((n) => n.onUs && n.level !== "urgent");
-  const waitingOnThemSteps = outstanding.filter((n) => !n.onUs);
+  const waitingOnUsSteps = outstanding.filter((n) => n.onUs && n.level !== "urgent" && n.level !== "low");
+  const waitingOnThemSteps = outstanding.filter((n) => !n.onUs && n.level !== "low");
+  const lowPrioritySteps = outstanding.filter((n) => n.level === "low");
 
   return (
     <>
@@ -166,6 +171,7 @@ export default async function DashboardPage() {
             <NextStepGroup label="Urgent" dotClassName="bg-red-500" items={urgentSteps} />
             <NextStepGroup label="Waiting on us" dotClassName="bg-amber-500" items={waitingOnUsSteps} />
             <NextStepGroup label="Waiting on them" dotClassName="bg-slate-300" items={waitingOnThemSteps} />
+            <NextStepGroup label="Low priority" dotClassName="bg-slate-300" items={lowPrioritySteps} />
           </div>
         </section>
       ) : null}
