@@ -4,6 +4,7 @@ import { LocalTime } from "@/components/local-time";
 import { MessageView } from "@/components/message-view";
 import { NextStep } from "@/components/next-step";
 import { StatTile } from "@/components/stat-tile";
+import { Chevron } from "@/components/chevron";
 import { Badge, PRIORITY_TONE, CONVERSATION_TONE } from "@/components/badge";
 import {
   CONVERSATION_LABELS,
@@ -297,17 +298,20 @@ export default async function DashboardPage() {
                             }`}
                             aria-hidden="true"
                           />
-                          <details className="min-w-0 flex-1">
-                            <summary className="cursor-pointer text-sm text-ink hover:text-brand">
-                              <span className={outbound ? "text-ink-muted" : "font-medium text-brand"}>
-                                {outbound ? "We: " : "They: "}
-                              </span>
-                              {message.suspected_phishing ? (
-                                <span title={message.phishing_reasoning ?? "Suspected phishing"} aria-label="Suspected phishing">
-                                  ⚠️{" "}
+                          <details className="group min-w-0 flex-1">
+                            <summary className="flex cursor-pointer items-start gap-1.5 text-sm text-ink hover:text-brand">
+                              <Chevron />
+                              <span className="min-w-0">
+                                <span className={outbound ? "text-ink-muted" : "font-medium text-brand"}>
+                                  {outbound ? "We: " : "They: "}
                                 </span>
-                              ) : null}
-                              {message.summary || message.subject || "(no subject)"}
+                                {message.suspected_phishing ? (
+                                  <span title={message.phishing_reasoning ?? "Suspected phishing"} aria-label="Suspected phishing">
+                                    ⚠️{" "}
+                                  </span>
+                                ) : null}
+                                {message.summary || message.subject || "(no subject)"}
+                              </span>
                             </summary>
                             <div className="mt-2">
                               <MessageView message={message} />

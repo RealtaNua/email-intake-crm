@@ -5,6 +5,7 @@ import { reprocessContact, logReply, saveRemarks } from "../actions";
 import { LocalTime } from "@/components/local-time";
 import { MessageView } from "@/components/message-view";
 import { NextStep } from "@/components/next-step";
+import { Chevron } from "@/components/chevron";
 import { Badge, PRIORITY_TONE, CONVERSATION_TONE } from "@/components/badge";
 import {
   CONVERSATION_LABELS,
@@ -291,9 +292,12 @@ export default async function ContactPage({
                       </div>
                     ) : null}
 
-                    <details className="mt-3">
-                      <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-900">
-                        {message.subject || "(no subject)"} — show full message
+                    <details className="group mt-3">
+                      <summary className="flex cursor-pointer items-start gap-1.5 text-xs text-slate-500 hover:text-slate-900">
+                        <Chevron className="mt-0.5" />
+                        <span className="min-w-0">
+                          {message.subject || "(no subject)"} — show full message
+                        </span>
                       </summary>
                       <div className="mt-2">
                         <MessageView message={message} />

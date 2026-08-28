@@ -210,7 +210,12 @@ scaffold hardcoded `font-family: Arial` here, which silently overrode it.
 
 Cards are **lifted with shadow, never outlined with a border**. Adding
 `border border-slate-200` to a `.card` reintroduces the flat look the shadow exists to
-avoid. Disclosure triangles are hidden globally — they are noisy at this density.
+avoid. The *native* disclosure triangle is hidden globally — it is noisy at this
+density — but hiding it left a collapsed message looking like plain text, with
+nothing to say it opened. Every `<details>` therefore carries an explicit
+`<Chevron />`: put `group` on the `<details>`, and the arrow rotates on open via
+`group-open:`. Suppressing the native marker without supplying a replacement is
+the bug, not the style.
 
 ### Layout pattern
 
@@ -233,6 +238,7 @@ copy-pasted across three files and were already drifting before `Badge` existed.
 | `StatTile` | Headline number, uppercase label, accent bar. For the row above a list. |
 | `NextStep` | Pending action. Bold text in a tinted box. |
 | `LocalTime` | Timestamps. Never format dates inline — see gotcha 8. |
+| `Chevron` | Expand/collapse arrow for a `<details>` summary. Needs `group` on the `<details>`; no client JS. |
 | `MessageView` | An email rendered as an email: header block, body, sign-off. |
 | `NavLink` | Nav pill with active state, styled for the gradient header. |
 
