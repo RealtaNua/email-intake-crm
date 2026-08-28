@@ -11,6 +11,7 @@ type ContactJoin = {
   status: string;
   total_received: number;
   notes: { text: string }[] | null;
+  next_step: string | null;
   companies: { domain: string; profile: unknown } | null;
   company_id?: string | null;
 };
@@ -241,7 +242,7 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
   const { data: enquiry, error: readError } = await supabase
     .from("enquiries")
     .select(
-      "id, contact_id, direction, received_at, sender_email, sender_name, sender_domain, subject, body_plain, classification_status, contacts ( id, name, company_id, status, total_received, notes, companies ( domain, profile ) )",
+      "id, contact_id, direction, received_at, sender_email, sender_name, sender_domain, subject, summary, body_plain, classification_status, contacts ( id, name, company_id, status, total_received, notes, next_step, companies ( domain, profile ) )",
     )
     .eq("id", enquiryId)
     .single();
@@ -436,8 +437,15 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
       await supabase
         .from("contacts")
         .update({
-          // Keep the existing next step rather than replacing it with junk.
-          ...(nextStepOk ? { next_step: decision.next_step } : {}),
+          // Keep the existing next step rather than replacing it with junk —
+          // unless what is already stored is junk too, in which case clearing
+          // it is the honest outcome. A rejected value must not leave an
+          // earlier corrupted run's answer standing as if it were current.
+          ...(nextStepOk
+            ? { next_step: decision.next_step }
+            : isDegenerate(contact?.next_step, true)
+              ? { next_step: null }
+              : {}),
           conversation_status: decision.conversation_status,
           summary_updated_at: new Date().toISOString(),
         })
@@ -445,9 +453,15 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
     }
 
     await setStatus({
-      // A bad summary leaves the column alone; the dashboard falls back to the
-      // subject line, which beats showing the reader a single stray word.
-      ...(summaryOk ? { summary: decision.message_summary } : {}),
+      // A bad summary leaves a good stored one alone, but clears a stored one
+      // that is itself junk — otherwise a value rejected today keeps showing
+      // the identical value an earlier run already wrote. Null makes the
+      // dashboard fall back to the subject line.
+      ...(summaryOk
+        ? { summary: decision.message_summary }
+        : isDegenerate((enquiry as unknown as { summary: string | null }).summary)
+          ? { summary: null }
+          : {}),
       classification_raw: decision,
       // Priority and the phishing check only apply to messages they sent us.
       ...(isOutbound
