@@ -8,11 +8,12 @@ export function StatTile({
   label: string;
   value: string | number;
   hint?: string;
-  accent?: "slate" | "red" | "amber" | "emerald" | "brand";
+  accent?: "slate" | "red" | "orange" | "amber" | "emerald" | "brand";
 }) {
   const accents: Record<string, string> = {
     slate: "text-ink",
     red: "text-red-600",
+    orange: "text-orange-600",
     amber: "text-amber-600",
     emerald: "text-emerald-600",
     brand: "text-brand",
@@ -20,6 +21,7 @@ export function StatTile({
   const bars: Record<string, string> = {
     slate: "bg-slate-300",
     red: "bg-red-500",
+    orange: "bg-orange-500",
     amber: "bg-amber-500",
     emerald: "bg-emerald-500",
     brand: "bg-brand",

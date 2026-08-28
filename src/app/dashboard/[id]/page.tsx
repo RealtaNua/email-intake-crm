@@ -6,7 +6,13 @@ import { LocalTime } from "@/components/local-time";
 import { MessageView } from "@/components/message-view";
 import { NextStep } from "@/components/next-step";
 import { Badge, PRIORITY_TONE, CONVERSATION_TONE } from "@/components/badge";
-import { CONVERSATION_LABELS, type Contact, type Company, type Enquiry } from "@/lib/types";
+import {
+  CONVERSATION_LABELS,
+  attentionLevel,
+  type Contact,
+  type Company,
+  type Enquiry,
+} from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 // Reprocessing runs research plus a classification per enquiry, inline.
@@ -92,10 +98,7 @@ export default async function ContactPage({
           </div>
           <NextStep
             text={contact.next_step}
-            urgent={
-              contact.conversation_status === "awaiting_our_reply" &&
-              enquiries.some((e) => e.priority === "urgent")
-            }
+            urgent={attentionLevel(contact, enquiries) === "urgent"}
             className="mt-3"
           />
         </section>

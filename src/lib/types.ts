@@ -87,6 +87,14 @@ export type ContactWithRelations = Contact & {
   >[];
 };
 
+/** How a rating is written where it stands on its own, as a contact's badge. */
+export const PRIORITY_LABELS: Record<string, string> = {
+  urgent: "Urgent",
+  high: "High priority",
+  normal: "Normal",
+  low: "Low",
+};
+
 export const PRIORITY_STYLES: Record<string, string> = {
   urgent: "bg-red-100 text-red-900 ring-red-200",
   high: "bg-orange-100 text-orange-900 ring-orange-200",
@@ -94,16 +102,72 @@ export const PRIORITY_STYLES: Record<string, string> = {
   low: "bg-slate-100 text-slate-600 ring-slate-200",
 };
 
-const PRIORITY_RANK: Record<string, number> = { urgent: 4, high: 3, normal: 2, low: 1 };
+/** The shape the tiles and badges need from a message to judge a contact. */
+export type MessageState = {
+  direction: string;
+  priority: string | null;
+  received_at: string;
+};
 
-/** The most urgent rating across a contact's enquiries drives the list badge. */
-export function topPriority(
-  enquiries: { priority: string | null }[],
-): string | null {
-  let best: string | null = null;
-  for (const e of enquiries) {
-    if (!e.priority) continue;
-    if (!best || (PRIORITY_RANK[e.priority] ?? 0) > (PRIORITY_RANK[best] ?? 0)) best = e.priority;
+/**
+ * The rating on the latest message they sent us.
+ *
+ * Priority judges a message, not a person, so a contact's badge has to be the
+ * rating of whatever is actually on our plate now. Taking the highest rating
+ * across the whole thread left a contact marked urgent forever, long after the
+ * message that earned it had been answered.
+ *
+ * Our own replies carry no rating, so they are skipped rather than counted as
+ * an absence of urgency.
+ */
+export function currentPriority(messages: MessageState[]): string | null {
+  let latest: MessageState | null = null;
+  for (const m of messages) {
+    if (m.direction === "outbound" || !m.priority) continue;
+    if (!latest || +new Date(m.received_at) > +new Date(latest.received_at)) latest = m;
   }
-  return best;
+  return latest?.priority ?? null;
+}
+
+/**
+ * Whether we owe this contact a reply.
+ *
+ * The classifier's verdict wins when it has one. Until then — a message that
+ * has only just landed, or one classification could not finish — the messages
+ * themselves still say whose turn it is, and an unanswered inbound email is
+ * ours. Reading the column alone reported "0 waiting on us" with a fresh
+ * enquiry sitting unread.
+ */
+export function ballInOurCourt(
+  contact: { conversation_status: string | null },
+  messages: MessageState[],
+): boolean {
+  if (contact.conversation_status) {
+    return contact.conversation_status === "awaiting_our_reply";
+  }
+  let latest: MessageState | null = null;
+  for (const m of messages) {
+    if (!latest || +new Date(m.received_at) > +new Date(latest.received_at)) latest = m;
+  }
+  return latest?.direction === "inbound";
+}
+
+/**
+ * What a contact needs from us: the rating of their latest message and whose
+ * turn it is, judged together.
+ *
+ * A thread rated urgent that is waiting on THEM is not urgent for us — there is
+ * nothing to reply to today, and marking it red says there is. It is still the
+ * most important kind of thing to keep an eye on, so it reads as high priority
+ * rather than being flattened in with everything else.
+ *
+ * So `urgent` here means exactly one thing: rated urgent and on our desk.
+ */
+export function attentionLevel(
+  contact: { conversation_status: string | null },
+  messages: MessageState[],
+): string | null {
+  const priority = currentPriority(messages);
+  if (priority === "urgent" && !ballInOurCourt(contact, messages)) return "high";
+  return priority;
 }

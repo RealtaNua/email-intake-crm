@@ -426,6 +426,80 @@ setting the developer does not use will not surface through normal testing, and
 
 ---
 
+## 12. Summary tiles that did not count the messages
+
+**Symptom** — Reported by the owner from the dashboard: the four headline numbers did
+not match the records underneath them. A contact whose state read **"Waiting on them"**
+was being counted under **URGENT — "needs a reply today."**
+
+**Cause** — three separate ways of not counting the thing being described.
+
+1. **The counts were of the page, not the table.** `Contacts` was the length of a
+   query capped at `.limit(100)`, and `Messages` was the sum of the enquiries embedded
+   in those rows. A message whose sender never resolved to a contact hangs off no
+   contact at all, so it was invisible to a total that claimed to cover "both
+   directions".
+2. **`Urgent` used the highest rating in the whole thread.** `topPriority()` took the
+   maximum across every message a contact had ever sent, so one urgent enquiry marked
+   that contact urgent permanently — including after it had been answered and the
+   conversation had moved on. That is what put an URGENT badge next to "Waiting on
+   them".
+3. **`Waiting on us` read only `conversation_status`.** That column is written by
+   classification, so an enquiry that has just landed, or one whose classification did
+   not finish, has `null` there and was silently counted as *not* waiting — the tile
+   read `0` while the message sat unanswered.
+
+**Fix** — both dimensions now come from the message rows. `currentPriority()` takes
+the rating of the **latest inbound** message rather than the worst one ever received,
+and `ballInOurCourt()` trusts `conversation_status` when it is set and falls back to
+the direction of the newest message when it is not. The tiles count the tables
+directly instead of what the list happened to render, and the same two helpers drive
+the list badges, so a number and the rows below it cannot disagree.
+
+**Lesson** — a summary is a claim about the underlying rows, and it has to be computed
+from them. Each of these three shortcuts was cheaper than the real query and each drifted
+the moment the data grew past the case it was written on. A stale aggregate is worse than
+no aggregate: nobody double-checks a number that already looks plausible.
+
+This entry's own fix still had a gap — see entry 13.
+
+---
+
+## 13. "Urgent" and "waiting on us" are different questions
+
+**Symptom** — The owner, looking at the fix in entry 12: Daniel Lim's thread showed
+"Waiting on them" *and* an URGENT badge in the same row. If it's waiting on them, why
+would it be urgent?
+
+**Cause** — Entry 12 fixed the two tiles to each read the message rows correctly, but
+still treated urgency as one axis. `currentPriority()` returns the rating of the
+contact's latest inbound message regardless of who owes the next reply — correct for
+"what did they last send us", wrong as the sole input to a badge that is implicitly
+read as "needs action from us right now". Daniel's most urgent message had already
+been answered; the rating on it hadn't changed, and nothing in the badge said that
+that mattered.
+
+**Why the obvious fix breaks something else** — folding "waiting on us" into the
+urgency calculation directly (e.g. downgrading to `normal` when it's on them) would
+lose real information: an urgent thread sitting with them is still worth watching more
+closely than an ordinary one, just not something owed *today*.
+
+**Fix** — added a third bucket. `attentionLevel()` combines `currentPriority()` and
+`ballInOurCourt()`: urgent-and-on-us stays `urgent` (red, "needs a reply today"); urgent-
+but-on-them becomes a new `high` level (orange, "High priority" — new tile, new badge
+label, new `StatTile` accent) rather than being silently downgraded or left red. Every
+badge and tile reads this one function instead of `currentPriority()` directly, so the
+same judgement can't be computed two different ways in two places again.
+
+**Lesson** — a priority rating and an ownership state look like they overlap ("urgent"
+implies "act now") but are answers to different questions, and collapsing them into one
+axis discards whichever one loses. The fix in entry 12 was a real improvement — it made
+the two tiles individually correct — but "individually correct" is not the same as
+"correct together"; the combination needed its own name (`attentionLevel`) rather than
+being left for the reader to infer from two badges sitting side by side.
+
+---
+
 ## What these have in common
 
 Entries 6 and 7 are the same mistake twice:
