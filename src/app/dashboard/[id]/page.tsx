@@ -247,6 +247,11 @@ export default async function ContactPage({
                         {message.summary || message.subject || "(no subject)"}
                       </p>
                       <span className="flex shrink-0 items-center gap-2">
+                        {!outbound && message.suspected_phishing ? (
+                          <Badge tone="rose">
+                            <span aria-hidden="true">⚠️</span>&nbsp;Suspected phishing
+                          </Badge>
+                        ) : null}
                         {!outbound && message.priority ? (
                           <Badge tone={PRIORITY_TONE[message.priority] ?? "slate"} uppercase>
                             {message.priority}
@@ -255,6 +260,18 @@ export default async function ContactPage({
                         <LocalTime iso={message.received_at} className="text-xs tabular-nums text-slate-400" />
                       </span>
                     </div>
+
+                    {!outbound && message.suspected_phishing ? (
+                      <div className="mt-2 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50/70 px-3 py-2 text-rose-900">
+                        <span aria-hidden="true">⚠️</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">
+                            Suspected scam or phishing
+                          </p>
+                          <p className="mt-0.5 text-sm">{message.phishing_reasoning}</p>
+                        </div>
+                      </div>
+                    ) : null}
 
                     {!outbound && message.priority_reasoning ? (
                       <div className="mt-2 border-l-2 border-slate-200 pl-3">

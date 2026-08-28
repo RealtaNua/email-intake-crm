@@ -75,6 +75,8 @@ export type Enquiry = {
   respond_by: string | null;
   classification_status: string;
   classified_at: string | null;
+  suspected_phishing: boolean;
+  phishing_reasoning: string | null;
 };
 
 /** A contact as rendered on the list page, with its company and enquiries. */
@@ -84,6 +86,7 @@ export type ContactWithRelations = Contact & {
     Enquiry,
     | "id" | "subject" | "priority" | "received_at" | "direction"
     | "body_plain" | "body_full" | "summary" | "sender_name" | "sender_email" | "recipient"
+    | "suspected_phishing" | "phishing_reasoning"
   >[];
 };
 

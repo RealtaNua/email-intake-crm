@@ -33,23 +33,31 @@ function NextStepGroup({
       </p>
       {items.length ? (
         <ul className="mt-2 space-y-0.5">
-          {items.map(({ contact }) => (
-            <li key={contact.id}>
-              <a
-                href={`#contact-${contact.id}`}
-                title={contact.next_step ?? undefined}
-                className="-mx-2 flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50"
-              >
-                <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${dotClassName}`} aria-hidden="true" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-ink">
-                    {contact.name || contact.email}
+          {items.map(({ contact }) => {
+            const phishingFlag = contact.enquiries?.find((e) => e.suspected_phishing);
+            return (
+              <li key={contact.id}>
+                <a
+                  href={`#contact-${contact.id}`}
+                  title={contact.next_step ?? undefined}
+                  className="-mx-2 flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50"
+                >
+                  <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${dotClassName}`} aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-ink">
+                      {phishingFlag ? (
+                        <span title={phishingFlag.phishing_reasoning ?? "Suspected phishing"} aria-label="Suspected phishing">
+                          ⚠️{" "}
+                        </span>
+                      ) : null}
+                      {contact.name || contact.email}
+                    </span>
+                    <span className="block truncate text-xs text-ink-muted">{contact.next_step}</span>
                   </span>
-                  <span className="block truncate text-xs text-ink-muted">{contact.next_step}</span>
-                </span>
-              </a>
-            </li>
-          ))}
+                </a>
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="mt-2 text-xs text-ink-muted">Nothing outstanding.</p>
@@ -65,7 +73,7 @@ export default async function DashboardPage() {
   // why this reads from contacts rather than from the message log.
   const { data, error } = await supabase
     .from("contacts")
-    .select("*, companies ( domain, profile, enrichment_status ), enquiries ( id, subject, priority, received_at, direction, body_plain, body_full, summary, sender_name, sender_email, recipient )")
+    .select("*, companies ( domain, profile, enrichment_status ), enquiries ( id, subject, priority, received_at, direction, body_plain, body_full, summary, sender_name, sender_email, recipient, suspected_phishing, phishing_reasoning )")
     .order("last_seen_at", { ascending: false })
     .limit(100);
 
@@ -166,7 +174,7 @@ export default async function DashboardPage() {
 
       {outstanding.length > 0 ? (
         <section className="card mt-4 p-6">
-          <h2 className="text-base font-semibold text-ink">Next steps</h2>
+          <h2 className="text-base font-semibold text-ink">To-Do Items</h2>
           <div className="mt-3 space-y-5">
             <NextStepGroup label="Urgent" dotClassName="bg-red-500" items={urgentSteps} />
             <NextStepGroup label="Waiting on us" dotClassName="bg-amber-500" items={waitingOnUsSteps} />
@@ -191,6 +199,7 @@ export default async function DashboardPage() {
             const priority = attentionLevel(contact, contact.enquiries ?? []);
             const profile = contact.companies?.profile ?? null;
             const count = contact.enquiries?.length ?? 0;
+            const phishingFlag = contact.enquiries?.find((e) => e.suspected_phishing);
 
             return (
               <li
@@ -210,6 +219,11 @@ export default async function DashboardPage() {
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2">
+                    {phishingFlag ? (
+                      <Badge tone="rose">
+                        <span aria-hidden="true">⚠️</span>&nbsp;Suspected phishing
+                      </Badge>
+                    ) : null}
                     {contact.conversation_status ? (
                       <Badge tone={CONVERSATION_TONE[contact.conversation_status] ?? "slate"}>
                         {CONVERSATION_LABELS[contact.conversation_status] ?? contact.conversation_status}
@@ -227,6 +241,18 @@ export default async function DashboardPage() {
                     />
                   </div>
                 </div>
+
+                {phishingFlag ? (
+                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50/70 px-4 py-3 text-rose-900">
+                    <span aria-hidden="true">⚠️</span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">
+                        Suspected scam or phishing
+                      </p>
+                      <p className="mt-0.5 text-sm">{phishingFlag.phishing_reasoning}</p>
+                    </div>
+                  </div>
+                ) : null}
 
                 {profile ? (
                   <p className="mt-3 text-sm text-ink">
@@ -276,6 +302,11 @@ export default async function DashboardPage() {
                               <span className={outbound ? "text-ink-muted" : "font-medium text-brand"}>
                                 {outbound ? "We: " : "They: "}
                               </span>
+                              {message.suspected_phishing ? (
+                                <span title={message.phishing_reasoning ?? "Suspected phishing"} aria-label="Suspected phishing">
+                                  ⚠️{" "}
+                                </span>
+                              ) : null}
                               {message.summary || message.subject || "(no subject)"}
                             </summary>
                             <div className="mt-2">

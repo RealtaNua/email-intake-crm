@@ -6,7 +6,7 @@ this file holds everything that changes.
 
 **Keep it current.** It is loaded as fact, so anything stale here is read as true.
 
-Last updated: 2026-08-28 · 32 commits · 9 migrations
+Last updated: 2026-08-28 · 33 commits · 10 migrations
 
 ---
 
@@ -52,6 +52,18 @@ Added after the fact, in response to how the thing actually behaved:
   changes needed here."* Do not restyle without being asked. The design system is
   documented in `CLAUDE.md`.
 - **`scripts/reprocess.ts`** for ops backfills.
+- **Phishing/scam detection** (0010). Classification now separately flags a
+  concrete, checkable mismatch (claimed institutional authority the sending
+  domain contradicts), not vague suspicion or a personal domain alone. Surfaces
+  as a rose alert badge and reasoning on the contact card, the To-Do Items panel,
+  and the message timeline. Requires migration 0010 applied before deploy — see
+  the ordering note below.
+
+⚠️ **Migration 0010 must be applied to the live database before/at the same time
+as the code that writes `suspected_phishing`/`phishing_reasoning`.** Until it is,
+any real inbound email arriving via the webhook will fail classification (rows
+still land safely; `classification_status` just ends up `failed` and can be
+reprocessed later) because the new columns don't exist yet on Supabase.
 
 ## Current data
 

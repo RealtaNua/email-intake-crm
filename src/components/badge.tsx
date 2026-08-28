@@ -1,4 +1,4 @@
-type Tone = "red" | "orange" | "sky" | "slate" | "emerald" | "amber" | "violet";
+type Tone = "red" | "orange" | "sky" | "slate" | "emerald" | "amber" | "violet" | "rose";
 
 const TONES: Record<Tone, string> = {
   red: "bg-red-50 text-red-700 ring-red-100",
@@ -8,6 +8,9 @@ const TONES: Record<Tone, string> = {
   emerald: "bg-emerald-50 text-emerald-700 ring-emerald-100",
   violet: "bg-violet-50 text-violet-700 ring-violet-100",
   slate: "bg-slate-100 text-slate-600 ring-slate-200",
+  // Reserved for security alerts (suspected phishing/scam) — deliberately its
+  // own colour, not red, so it never collides with "urgent and on us".
+  rose: "bg-rose-50 text-rose-700 ring-rose-100",
 };
 
 /** Soft tinted pill. Tone carries the meaning, so it is always explicit. */

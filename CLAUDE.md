@@ -66,7 +66,8 @@ companies  (one per domain)   profile, enrichment_status
 contacts   (one per sender)   name, status, notes[], total_received, remarks,
     ^                         next_step, conversation_status
 enquiries  (one per MESSAGE)  direction, subject, body_plain, body_full,
-                              summary, priority, priority_reasoning
+                              summary, priority, priority_reasoning,
+                              suspected_phishing, phishing_reasoning
 ```
 
 **Contacts are the unit of the CRM.** The dashboard lists contacts, not emails.
@@ -75,6 +76,13 @@ enquiries  (one per MESSAGE)  direction, subject, body_plain, body_full,
   already-researched employer costs nothing extra.
 - **Durable facts belong on the contact.** Step 8's chat writes here.
 - **Priority stays on the enquiry.** It judges a message, not a person.
+- **The phishing check lives on the enquiry, same reasoning as priority.** It flags
+  a concrete, checkable mismatch — a claimed institutional authority the sending
+  domain contradicts — not a vague feeling, and never a personal email domain on
+  its own. Classification is told explicitly: when in doubt, leave it false. A
+  false accusation against a genuine enquirer costs a relationship; a missed
+  low-effort scam costs nothing, because the priority rating already contains
+  unverified urgency.
 - **Personal domains get no company row.** A "Gmail Inc." record is worse than none.
 - **Each message carries its own one-sentence `summary`**, written once and never
   rewritten. The timeline is those lines in date order.
@@ -238,6 +246,8 @@ copy-pasted across three files and were already drifting before `Badge` existed.
 - **Emerald** = money received, won, active client.
 - **Violet** = the brand, and neutral metadata like "has remarks".
 - **Slate** = low priority, closed, anything inert.
+- **Rose** = a security alert (suspected phishing/scam). Reserved exclusively for
+  that — never repurposed for urgency, which is red's job.
 
 `NextStep` is red only when urgent *and* on us; amber otherwise. A thread rated
 urgent that is waiting on *them* is never red — there is nothing to reply to today,

@@ -74,10 +74,24 @@ const CLASSIFY_TOOL: Anthropic.Tool = {
         description:
           "Whose court the ball is in. awaiting_our_reply means they are waiting on us.",
       },
+      suspected_phishing: {
+        type: "boolean",
+        description:
+          "True only when you can point to a concrete, checkable mismatch — see " +
+          "CHECKING FOR PHISHING AND SCAMS above. False for an ordinary low-quality " +
+          "or irrelevant enquiry; that is what the low priority rating is for.",
+      },
+      phishing_reasoning: {
+        type: "string",
+        description:
+          "If suspected_phishing is true, the specific mismatch that triggered it " +
+          "(e.g. 'claims to write for the Ministry of Education but sends from a " +
+          "personal gmail.com address'). Empty string if suspected_phishing is false.",
+      },
     },
     required: [
       "message_summary", "priority", "reasoning", "signals", "respond_by",
-      "next_step", "conversation_status",
+      "next_step", "conversation_status", "suspected_phishing", "phishing_reasoning",
     ],
   },
 };
@@ -141,6 +155,32 @@ HOW TO JUDGE
 - Be willing to rate things low. A triage system that marks everything high is useless.
 - Your reasoning is read by a human deciding what to do next. Make it specific and
   honest, including when you are uncertain.
+
+CHECKING FOR PHISHING AND SCAMS
+Before rating priority, check separately whether this message shows a real,
+checkable sign of being a phishing attempt or scam rather than a genuine enquiry —
+not just a low-quality or irrelevant one. Concrete red flags:
+- The sender claims to write on behalf of a government agency, ministry, large
+  company, or other official body, but sends from a personal email domain
+  (gmail.com, yahoo.com, outlook.com, etc.) rather than that organisation's own
+  domain. The claim of institutional authority is what makes the mismatch a red
+  flag, not the personal domain by itself.
+- Urgency combined with a request for payment, a wire transfer, gift cards, or
+  banking or credential details.
+- A reply-to address, or a link, that does not match the sender's stated
+  organisation.
+- Generic greetings paired with an unusually large or too-good-to-be-true offer.
+- A request to click a link or open an attachment with no other legitimate content.
+
+A personal email domain on its own is NOT suspicious — most genuine enquiries in
+this inbox come from gmail.com, and personal domains get no company research for
+exactly that reason. It only becomes a red flag combined with a specific, checkable
+claim (a stated title at a named organisation, a claimed procurement process, an
+official-sounding department) that the domain contradicts. Set suspected_phishing
+only when you can point to that concrete mismatch in phishing_reasoning. When in
+doubt, leave it false: a false accusation against a genuine enquirer costs a
+relationship, while a missed low-effort scam costs nothing, since the priority
+rating already keeps unverified urgency in check.
 
 Every field you return must be real. If you cannot say something useful, say so plainly —
 never emit filler like "placeholder", "n/a" or "TBD".
@@ -333,6 +373,8 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
       respond_by?: string;
       next_step: string;
       conversation_status: string;
+      suspected_phishing?: boolean;
+      phishing_reasoning?: string;
     };
 
     // Conversation state belongs to the relationship, not to one message.
@@ -350,7 +392,7 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
 
     await setStatus({
       summary: decision.message_summary,
-      // Priority only applies to messages they sent us.
+      // Priority and the phishing check only apply to messages they sent us.
       ...(isOutbound
         ? {}
         : {
@@ -358,6 +400,8 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
             priority_reasoning: decision.reasoning,
             priority_signals: decision.signals,
             respond_by: decision.respond_by,
+            suspected_phishing: decision.suspected_phishing ?? false,
+            phishing_reasoning: decision.suspected_phishing ? decision.phishing_reasoning : null,
           }),
       classification_status: "classified",
       classified_at: new Date().toISOString(),
@@ -366,6 +410,7 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
       "[classify]", enquiryId,
       isOutbound ? "(reply)" : `-> ${decision.priority}`,
       "|", decision.conversation_status,
+      !isOutbound && decision.suspected_phishing ? "| SUSPECTED PHISHING" : "",
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
