@@ -85,7 +85,15 @@ async function main() {
 
   for (const contact of contacts) await reprocessContact(admin, contact);
 
-  const { data: usage } = await admin.from("claude_usage").select("*").limit(1).single();
+  // claude_usage is one row per UTC day (see migration 0002) — without this
+  // filter, .limit(1) returned whatever row Postgres handed back first,
+  // which in practice was the oldest day on record, not today's.
+  const todayUtc = new Date().toISOString().slice(0, 10);
+  const { data: usage } = await admin
+    .from("claude_usage")
+    .select("*")
+    .eq("day", todayUtc)
+    .maybeSingle();
   if (usage) {
     const cost = (usage.input_tokens * 5 + usage.output_tokens * 25) / 1e6;
     console.log(`\nspend today: ${usage.calls} calls ≈ $${cost.toFixed(2)}`);

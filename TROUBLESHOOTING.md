@@ -500,6 +500,40 @@ being left for the reader to infer from two badges sitting side by side.
 
 ---
 
+## 14. `reprocess.ts` always printed the same "20 calls ≈ $2.03"
+
+**Symptom** — The owner, reprocessing Priya Menon (1 call) and then Marcus Webb
+(2 calls), got the identical closing line both times: `spend today: 20 calls ≈
+$2.03`. Two runs with different real costs printing the same number is proof
+by itself that the number isn't "today" — it doesn't need a second check to
+be suspicious.
+
+**Cause** — `claude_usage` (migration `0002`) is one row per UTC day, keyed on
+`day`. The script's closing summary read it with `.limit(1).single()` and no
+`.eq("day", ...)` filter. With no filter and no explicit order, that returns
+whatever row Postgres hands back first — in practice the oldest row in the
+table, which is the very first day this project ever logged usage, back
+before per-call logging existed (the same 20-call, $2.03 baseline already
+flagged in `STATUS.md`'s open items). Every run printed that frozen row.
+
+**What it did *not* affect** — this was cosmetic, confined to one `console.log`
+at the end of the script. `claim_claude_call` (same migration) already scopes
+correctly to today's UTC date for the real cap enforcement, and the
+dashboard's `$X.XX today` header badge reads `claude_calls` (the accurate
+per-call log, migration `0009`) filtered to today. Both were fine the whole
+time; only the script's own summary line was reading the wrong row.
+
+**Fix** — filter `claude_usage` to today's UTC date before reading it, and use
+`maybeSingle()` instead of `single()` so an empty result doesn't throw.
+
+**Lesson** — `.limit(1).single()` with no filter and no order is a bug that
+looks like a working query: it returns *a* row, never errors, and only shows
+itself when you happen to compare two runs and notice the number never moves.
+The tell was in the comparison, not the query — one run alone would have looked
+perfectly plausible.
+
+---
+
 ## What these have in common
 
 Entries 6 and 7 are the same mistake twice:
