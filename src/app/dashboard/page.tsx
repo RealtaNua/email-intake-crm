@@ -118,11 +118,11 @@ export default async function DashboardPage() {
 
       {outstanding.length > 0 ? (
         <section className="card mt-4 p-6">
-          <h2 className="text-sm font-semibold text-ink">Next steps</h2>
-          <div className="mt-3 grid gap-x-8 gap-y-5 sm:grid-cols-2">
+          <h2 className="text-base font-semibold text-ink">Next steps</h2>
+          <div className="mt-3 space-y-5">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">
-                Pending your reply · {pendingSteps.length}
+                Urgent · {pendingSteps.length}
               </p>
               {pendingSteps.length ? (
                 <ul className="mt-2 space-y-0.5">
