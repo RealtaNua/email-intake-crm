@@ -376,6 +376,7 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
       suspected_phishing?: boolean;
       phishing_reasoning?: string;
     };
+    console.log("[classify] raw decision", enquiryId, JSON.stringify(decision));
 
     // Conversation state belongs to the relationship, not to one message.
     const contactId = (enquiry as unknown as { contact_id: string | null }).contact_id;
