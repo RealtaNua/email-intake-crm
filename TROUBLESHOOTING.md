@@ -590,21 +590,68 @@ string says. Anthropic's structured outputs additionally do not support
 `minLength`/`maxLength`, so this class of check cannot be expressed in the
 schema at all — it has to be code.
 
-**Fix** — validate the decision before storing it. A degenerate value (empty,
-a bare single word, stray `<`/`>` markup, under 20 characters) leaves its
-column untouched rather than overwriting good data; the dashboard falls back to
-the subject line. `next_step` still accepts its documented one-word `"None"`. A
-phishing flag whose reasoning is unusable is downgraded to false — which is
-what the prompt already tells the model to do when in doubt, and an accusation
-with no readable reason is worse than none.
+**Mitigation (shipped first, stays in place)** — validate the decision before
+storing it. A degenerate value (empty, a bare single word, stray `<`/`>`
+markup, under 20 characters) leaves its column untouched rather than
+overwriting good data; the dashboard falls back to the subject line. A stored
+value that is itself junk gets cleared rather than kept, so a rejected fresh
+answer cannot leave an earlier bad run standing as if it were current.
+`next_step` still accepts its documented one-word `"None"`. A phishing flag
+whose reasoning is unusable is downgraded to false — what the prompt already
+says to do when in doubt. This does not depend on understanding the cause and
+was never expected to fix it — it only stops junk from reaching the reader.
+
+**Isolating the actual cause** — a system-prompt line telling the model a
+suspected scam still needs a real summary and a real next step fixed
+`next_step` immediately and did nothing for `message_summary`, on the same
+call. That split was the clue: something was reaching one field and not the
+other, despite both being asked for in the same sentence of the prompt.
+
+`scripts/dump-prompt.ts` (added to reproduce the exact payload rather than a
+hand-copied approximation) rendered the identical system prompt, schema, and
+email as a claude.ai-pasteable request. Run there — same wording, same
+`effort: medium`, same model — `message_summary` came back correct, more than
+once. That single result eliminated, in order: the email content (unchanged
+across both paths), the prompt wording (identical), the field's position in
+the schema's `required` array (identical), the effort level (same setting),
+and the model (same Opus). Everything that could be described as "the
+prompt" was now controlled for and still not explaining the difference.
+
+What differs between the two paths is the delivery mechanism: on the API,
+the schema travels in the `tools` parameter, which Anthropic renders *before*
+the system prompt, under `strict: true` constrained decoding. In claude.ai
+there is no `tools` parameter — the schema was inlined into the prompt itself,
+after the instructions. The system-prompt fix reaching `next_step` but not
+`message_summary` is consistent with strict decoding reading the *field's own
+description* differently than free-form prompt text reaches it.
+
+**Fix** — moved the instruction out of the system prompt and into
+`message_summary`'s own property description in `CLASSIFY_TOOL`: *"Describe
+what the message said even when you believe it is a scam — never a verdict or
+an instruction like 'ignore' or 'spam'; suspected_phishing carries that."*
+Two sentences, no other field touched.
+
+**Verified** — reprocessed Priya Menon (1 call). `message_summary` returned
+*"Claimed to write for an MOE division with approved budget of SGD 55,000 for
+a leadership communication programme covering roughly 60 officers in three
+cohorts, requiring first delivery in the second week of March and commitment
+before FY close on 31 March, and asked for a scoping call this week."* —
+specific, past tense, matches the field's own spec. `next_step`, the phishing
+flag and its reasoning were all intact on the same call. Confirmed on the
+dashboard, not just in the raw response.
 
 **Lesson** — the guard already in the prompt (*"never emit filler like
 'placeholder', 'n/a' or 'TBD'"*) was written after entry 9, where the model
 emitted the literal string "placeholder". It did not prevent this, because
 `"ignore"` is not filler — it is a real word the model meant, in the wrong box.
-**A prompt instruction is not a validation layer.** Anything a model writes
-straight into a column the owner will show someone needs a check in code that
-does not depend on the model cooperating.
+**A prompt instruction is not a validation layer**, and the code guard above
+remains in place regardless of this fix — but a second lesson sits underneath
+the first: **not every instruction belongs in the same place.** A rule can be
+true and still fail to reach the field it's about, if it's written somewhere
+the decoding path for that field doesn't weight the same way. The fix here was
+not "give it a firmer instruction" — the firmer instruction already existed
+and had already worked on a neighbouring field. It was moving the *same*
+instruction to where the broken field could actually see it.
 
 ---
 
