@@ -131,6 +131,30 @@ const RECORD_REPLY_TOOL: Anthropic.Tool = {
   },
 };
 
+/**
+ * Reject a value the model returned that is structurally a string but says
+ * nothing — the literal word "ignore" for a summary, or a stray fragment of
+ * markup ("</antmlifake>", seen on a real call).
+ *
+ * `strict: true` cannot catch this. It guarantees the shape — a string is
+ * present, the enum matches — and never inspects what the string says, and
+ * the API's structured output does not support minLength, so the check has to
+ * live here. Both observed failures landed in the fields asking for ONE short
+ * sentence, while the fields asking for two or three came back clean.
+ *
+ * The caller keeps the previous value rather than overwriting good data with
+ * this. See gotcha 9 in CLAUDE.md — the same failure mode produced the literal
+ * string "placeholder" before, and a prompt instruction did not prevent it.
+ */
+function isDegenerate(value: string | null | undefined, allowNone = false): boolean {
+  const text = (value ?? "").trim();
+  if (!text) return true;
+  if (/[<>]/.test(text)) return true;               // stray markup
+  if (allowNone && /^none[.!]?$/i.test(text)) return false; // next_step's documented "None"
+  if (!/\s/.test(text)) return true;                // a bare single word is never a sentence
+  return text.length < 20;
+}
+
 const SYSTEM = `You triage inbound business enquiries for the business described below.
 
 ${BUSINESS_CONTEXT}
@@ -377,13 +401,36 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
       phishing_reasoning?: string;
     };
 
+    const summaryOk = !isDegenerate(decision.message_summary);
+    const nextStepOk = !isDegenerate(decision.next_step, true);
+    // A phishing flag whose reasoning is unusable is an accusation we cannot
+    // show the reader. The prompt's own rule applies: when in doubt, false.
+    const phishingOk =
+      decision.suspected_phishing === true &&
+      !isDegenerate(decision.phishing_reasoning);
+
+    if (!summaryOk || !nextStepOk || (decision.suspected_phishing && !phishingOk)) {
+      console.warn(
+        "[classify] rejected degenerate field(s) for",
+        enquiryId,
+        JSON.stringify({
+          ...(summaryOk ? {} : { message_summary: decision.message_summary }),
+          ...(nextStepOk ? {} : { next_step: decision.next_step }),
+          ...(decision.suspected_phishing && !phishingOk
+            ? { phishing_reasoning: decision.phishing_reasoning }
+            : {}),
+        }),
+      );
+    }
+
     // Conversation state belongs to the relationship, not to one message.
     const contactId = (enquiry as unknown as { contact_id: string | null }).contact_id;
     if (contactId && isLatestMessage) {
       await supabase
         .from("contacts")
         .update({
-          next_step: decision.next_step,
+          // Keep the existing next step rather than replacing it with junk.
+          ...(nextStepOk ? { next_step: decision.next_step } : {}),
           conversation_status: decision.conversation_status,
           summary_updated_at: new Date().toISOString(),
         })
@@ -391,7 +438,9 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
     }
 
     await setStatus({
-      summary: decision.message_summary,
+      // A bad summary leaves the column alone; the dashboard falls back to the
+      // subject line, which beats showing the reader a single stray word.
+      ...(summaryOk ? { summary: decision.message_summary } : {}),
       classification_raw: decision,
       // Priority and the phishing check only apply to messages they sent us.
       ...(isOutbound
@@ -401,8 +450,8 @@ export async function classifyEnquiry(enquiryId: string): Promise<void> {
             priority_reasoning: decision.reasoning,
             priority_signals: decision.signals,
             respond_by: decision.respond_by,
-            suspected_phishing: decision.suspected_phishing ?? false,
-            phishing_reasoning: decision.suspected_phishing ? decision.phishing_reasoning : null,
+            suspected_phishing: phishingOk,
+            phishing_reasoning: phishingOk ? decision.phishing_reasoning : null,
           }),
       classification_status: "classified",
       classified_at: new Date().toISOString(),
