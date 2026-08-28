@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { Bricolage_Grotesque, Public_Sans, IBM_Plex_Mono } from "next/font/google";
 import styles from "./page.module.css";
 
@@ -46,7 +47,8 @@ export default function Home() {
         <nav className={styles.nav}>
           <div className={cx(styles.wrap, styles.navIn)}>
             <a className={styles.brand} href="#top">
-              <span className={styles.mark}>IC</span> Intake CRM
+              <Image src="/logo-white.png" alt="" width={28} height={28} />
+              Intake CRM
             </a>
             <div className={styles.navLinks}>
               <a href="#how">How it works</a>
@@ -85,7 +87,7 @@ export default function Home() {
         <div className={cx(styles.wrap, styles.shotLift)}>
           <div className={styles.frame}>
             <div className={styles.frameBar}>
-              <span className={styles.mark}>IC</span>
+              <Image src="/logo-white.png" alt="" width={24} height={24} />
               <b>Intake CRM</b>
               <div className={styles.tabs}>
                 <span className={cx(styles.tab, styles.tabOn)}>Contacts</span>

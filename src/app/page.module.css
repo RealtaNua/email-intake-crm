@@ -138,31 +138,19 @@
   text-decoration: none;
   letter-spacing: -.01em;
 }
-.mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: #fff;
-  display: grid;
-  place-items: center;
-  color: var(--violet);
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 600;
-}
 .navLinks {
   margin-left: auto;
   display: flex;
   align-items: center;
   gap: 26px;
 }
-.navLinks a {
+.navLinks a:not(.navCta) {
   color: rgba(255,255,255,.82);
   text-decoration: none;
   font-size: 14.5px;
   font-weight: 500;
 }
-.navLinks a:hover {
+.navLinks a:not(.navCta):hover {
   color: #fff;
 }
 .navCta {
@@ -285,11 +273,6 @@
   display: flex;
   align-items: center;
   gap: 12px;
-}
-.frameBar .mark {
-  width: 24px;
-  height: 24px;
-  font-size: 11px;
 }
 .frameBar b {
   font-family: var(--display);

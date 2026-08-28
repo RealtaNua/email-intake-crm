@@ -33,7 +33,7 @@ export default async function DashboardLayout({
         <header className="mx-auto max-w-5xl px-6 pt-5">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <Link href="/dashboard" className="flex items-center gap-2.5">
-              <Image src="/logo.png" alt="" width={36} height={36} className="h-9 w-9" />
+              <Image src="/logo-white.png" alt="" width={36} height={36} className="h-9 w-9" />
               <span className="text-[15px] font-semibold leading-tight tracking-tight text-white">
                 Intake&nbsp;CRM
               </span>
