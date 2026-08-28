@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabase, getUser } from "@/lib/supabase/server";
 import { LocalTime } from "@/components/local-time";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +26,7 @@ type Call = {
 
 export default async function UsagePage() {
   const supabase = await createServerSupabase();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await getUser();
   if (!user) redirect("/login");
 
   const { data } = await supabase

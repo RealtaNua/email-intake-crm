@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabase, getUser } from "@/lib/supabase/server";
 import { LocalTime } from "@/components/local-time";
 import type { CompanyProfile } from "@/lib/types";
 
@@ -18,7 +18,7 @@ type CompanyRow = {
 
 export default async function CompaniesPage() {
   const supabase = await createServerSupabase();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await getUser();
   if (!user) redirect("/login");
 
   const { data } = await supabase

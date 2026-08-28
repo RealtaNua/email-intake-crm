@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabase, getUser } from "@/lib/supabase/server";
 import { reprocessContact, logReply, saveRemarks } from "../actions";
 import { LocalTime } from "@/components/local-time";
 import { MessageView } from "@/components/message-view";
@@ -29,7 +29,7 @@ export default async function ContactPage({
   const { id } = await params;
   const supabase = await createServerSupabase();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await getUser();
   if (!user) redirect("/login");
 
   const { data: contactData } = await supabase
