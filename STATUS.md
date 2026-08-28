@@ -6,7 +6,7 @@ this file holds everything that changes.
 
 **Keep it current.** It is loaded as fact, so anything stale here is read as true.
 
-Last updated: 2026-08-28 · 33 commits · 10 migrations
+Last updated: 2026-08-28 · 45 commits · 11 migrations
 
 ---
 
@@ -59,15 +59,33 @@ Added after the fact, in response to how the thing actually behaved:
   and the message timeline. Requires migration 0010 applied before deploy — see
   the ordering note below.
 
-⚠️ **Migration 0010 must be applied to the live database before/at the same time
-as the code that writes `suspected_phishing`/`phishing_reasoning`.** Until it is,
-any real inbound email arriving via the webhook will fail classification (rows
-still land safely; `classification_status` just ends up `failed` and can be
-reprocessed later) because the new columns don't exist yet on Supabase.
+Migrations `0010` and `0011` are applied to the live database (`supabase db push`,
+2026-08-28). Migration history had not recorded `0010` even though its columns
+existed — the push applied both idempotently.
+
+- **Raw model output is stored** (0011). `enquiries.classification_raw` holds the
+  full tool-call decision from the most recent classification, overwritten on
+  reprocess, debug-only and not read by the app. Added because `console.log` did
+  not survive Vercel's runtime log buffer — a corrupted call two minutes after
+  that logging deployed was already unrecoverable. See `TROUBLESHOOTING.md` 15.
+- **Model output is validated before it is stored.** A degenerate value (empty,
+  bare single word, stray markup, under 20 chars) leaves its column untouched
+  instead of overwriting good data; a phishing flag with unusable reasoning is
+  downgraded to false. `strict: true` checks shape, never meaning, and structured
+  outputs do not support `minLength`.
+- **`reprocess.ts` no longer re-researches a company that already has a profile**
+  — pass `--research` to force it. Research is ~55k input tokens versus ~3k for a
+  classification, so every debugging run was silently buying the expensive one.
 
 ## Current data
 
-5 contacts · 2 companies · 9 messages · 20 Claude calls today (~$2.03)
+6 contacts · 2 companies · 10 messages (2 still unclassified) · 8 Claude calls
+today (~$0.95)
+
+⚠️ Two enquiries sit at `classification_status = pending` and have never been
+classified: "hihi test to claude" and "Corporate storytelling workshop for 200
+staff". `enquiries.body_full` is also null on Priya Menon's message. Neither is
+diagnosed yet.
 
 ⚠️ **The data is fabricated.** Jane Tan, Daniel Lim, Marcus Webb, Priya Menon, Serene
 Ho, and the SGD 42,000 proposal are all test fixtures written during the build. They
@@ -88,6 +106,16 @@ ready to say plainly that they are synthetic.
    `notes`, `total_received`, `status`. Propose the tool schema before writing code.
 5. **Per-call log is empty.** Logging began after the first 20 calls, which exist
    only as a daily total. It populates from the next real email.
+6. **`phishing_reasoning` is a required field with nothing to say when the flag is
+   false.** The schema asks for an empty string; on a real call the model returned
+   the stray markup `"</antmlifake>"` instead. Code now discards it, but the
+   cleaner fix is to drop it from the tool's `required` array so the model may
+   omit it. **Unverified against the live API** — standard JSON Schema allows it,
+   and the Anthropic docs do not require every property to be listed, but a wrong
+   guess here 400s every classification until reverted (soft: rows still land,
+   status ends up `failed`). Test with one call before trusting it.
+7. **Two enquiries never classified**, both at `classification_status = pending`.
+   Cause unknown — possibly the daily cap, possibly a failed early run.
 
 ## Cost
 

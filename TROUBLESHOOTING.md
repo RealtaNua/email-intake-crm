@@ -534,6 +534,113 @@ perfectly plausible.
 
 ---
 
+## 15. A summary that just said "ignore"
+
+**Symptom** — The owner spotted Priya Menon's timeline line reading `They: ⚠️
+ignore` on the dashboard. On the next reprocess her To-Do item said `ignore`
+too. Every *other* field on the same calls was specific and correct — the
+priority reasoning, the phishing reasoning and the signals all named the SGD
+55,000 budget, the 31 March deadline and the gmail/moe.gov.sg mismatch.
+
+**First diagnosis was wrong.** The word "ignore" appears exactly once in the
+whole prompt payload — in the `priority` enum's own description, `"low:
+courtesy reply or ignore."` — so the obvious theory was a token leaking from a
+neighbouring field. Marcus Webb disproves it: he is the *low priority* contact
+where that text actually applies, and his `next_step` came back as the fluent
+`"None — ignore, or send a one-line decline if you want the inbox clear."` The
+word is used correctly exactly where the leak theory predicts corruption.
+
+**Getting the evidence** — the raw API response was not recoverable. `claude_calls`
+stores only tokens and cost. A `console.log` of the decision was deployed at
+06:21 UTC and a corrupted call ran at 06:23, yet `vercel logs -q "classify"`
+returned nothing minutes later — the runtime log buffer had already been
+flushed by the dashboard's own polling traffic. Persisting it to
+`enquiries.classification_raw` (migration `0011`) is what finally captured it.
+
+**What the data showed** — commit `2892e84` (phishing detection) landed at
+06:05:20 UTC. Priya's four calls straddle it, and the input grew by exactly the
+773 tokens the new section and two new fields added:
+
+| Time (UTC) | Phishing feature | In | Out | `message_summary` | `next_step` |
+|---|---|---|---|---|---|
+| 04:05 | before | 2465 | 665 | *(overwritten)* | *(overwritten)* |
+| 06:13 | after | 3238 | 1458 | `"ignore"` | full sentence |
+| 06:23 | after | 3238 | 1207 | `"ignore"` | `"ignore"` |
+| 06:38 | after | 3238 | 1306 | `"ignore"` | `"ignore"` |
+
+Reprocessing Marcus against the same prompt then produced a *different* junk
+value in a *different* field: `"phishing_reasoning": "</antmlifake>\n"` — stray
+markup, where the schema asks for an empty string when the flag is false. His
+summary and next step were both fine, so the phishing section had not degraded
+the prompt generally.
+
+**Cause** — sort the nine fields by what they ask for and the pattern is exact.
+The fields asking for *one short sentence* (`message_summary`, `next_step`) are
+the two that collapse; the fields asking for *two or three sentences*
+(`reasoning`, `phishing_reasoning` when genuinely set), and every enum and
+boolean, come back clean. Both observed failures are a short free-text slot
+being filled with whatever was top of mind — Priya's verdict about a scam, or
+nothing at all — rather than with what the field asked for. The schema also has
+no way to say "high business value, but do not engage", so a contradiction the
+model genuinely holds has nowhere legitimate to go.
+
+**Why `strict: true` did not catch it** — strict tool use guarantees the
+*shape*: the field is present and is a string. It never inspects what the
+string says. Anthropic's structured outputs additionally do not support
+`minLength`/`maxLength`, so this class of check cannot be expressed in the
+schema at all — it has to be code.
+
+**Fix** — validate the decision before storing it. A degenerate value (empty,
+a bare single word, stray `<`/`>` markup, under 20 characters) leaves its
+column untouched rather than overwriting good data; the dashboard falls back to
+the subject line. `next_step` still accepts its documented one-word `"None"`. A
+phishing flag whose reasoning is unusable is downgraded to false — which is
+what the prompt already tells the model to do when in doubt, and an accusation
+with no readable reason is worse than none.
+
+**Lesson** — the guard already in the prompt (*"never emit filler like
+'placeholder', 'n/a' or 'TBD'"*) was written after entry 9, where the model
+emitted the literal string "placeholder". It did not prevent this, because
+`"ignore"` is not filler — it is a real word the model meant, in the wrong box.
+**A prompt instruction is not a validation layer.** Anything a model writes
+straight into a column the owner will show someone needs a check in code that
+does not depend on the model cooperating.
+
+---
+
+## 16. Every reprocess re-researched a company it already knew
+
+**Symptom** — The owner ran `npx tsx scripts/reprocess.ts marcus.webb@hubspot.com`
+to test a classification change and watched it print `[enrich] profiled
+hubspot.com -> HubSpot, Inc.` — despite the dashboard already showing
+`HubSpot, Inc. · B2B SaaS — CRM and marketing/sales software` before the run.
+
+**Cause** — `enrichCompany()` returns early unless `enrichment_status` is
+`"pending"`, and that guard is the whole mechanism behind "company research is
+per domain and runs once". `reprocess.ts` set the status *back* to `"pending"`
+immediately before calling it, defeating the guard by construction. Nothing was
+broken; the script was doing exactly what it said. It just made the expensive
+choice every time, invisibly.
+
+**Why it matters more than it looks** — research is the most expensive call in
+the system by a wide margin. A classification call on this contact is ~3,200
+input tokens; the company enrichment measured 54,902, almost entirely web
+search results re-entering context. Every debugging reprocess silently bought
+one, and the cost preview printed it as a flat "+1 company research" without
+saying it was avoidable.
+
+**Fix** — research only a company with no profile yet, or when `--research`
+explicitly forces it. The cost preview now counts distinct domains that will
+actually run, rather than every contact holding a `company_id` — colleagues
+share a company, so `--all` was over-counting and, worse, would have researched
+the same domain once per contact.
+
+**Lesson** — a guard that a caller resets right before invoking is not a guard.
+The skip logic read as correct in `enrichment.ts` and the reset read as
+reasonable in `reprocess.ts`; only running the two together shows the cost.
+
+---
+
 ## What these have in common
 
 Entries 6 and 7 are the same mistake twice:
