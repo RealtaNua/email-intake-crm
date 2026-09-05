@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createServerSupabase, getUser } from "@/lib/supabase/server";
-import { reprocessContact, logReply, saveRemarks } from "../actions";
+import { reprocessContact, logReply, saveRemarks, type RemarksResult } from "../actions";
 import { LocalTime } from "@/components/local-time";
 import { MessageView } from "@/components/message-view";
 import { NextStep } from "@/components/next-step";
+import { RemarksForm } from "@/components/remarks-form";
 import { Chevron } from "@/components/chevron";
 import { Badge, PRIORITY_TONE, CONVERSATION_TONE } from "@/components/badge";
 import {
@@ -106,33 +107,13 @@ export default async function ContactPage({
       ) : null}
 
       {/* ── Special remarks ─────────────────────────────────── */}
-      <section className="card mt-4 p-6">
-        <h2 className="text-sm font-semibold text-ink">Special remarks</h2>
-        <p className="mt-1 text-xs text-slate-400">
-          Yours. Never written or overwritten by the model.
-        </p>
-        <form
-          action={async (formData: FormData) => {
-            "use server";
-            await saveRemarks(id, formData);
-          }}
-          className="mt-2"
-        >
-          <textarea
-            name="remarks"
-            rows={3}
-            defaultValue={contact.remarks ?? ""}
-            placeholder="Anything worth knowing before you reply — preferences, history, sensitivities."
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
-          />
-          <button
-            type="submit"
-            className="mt-2 rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-deep"
-          >
-            Save remarks
-          </button>
-        </form>
-      </section>
+      <RemarksForm
+        remarks={contact.remarks}
+        action={async (_prev: RemarksResult, formData: FormData) => {
+          "use server";
+          return saveRemarks(id, _prev, formData);
+        }}
+      />
 
       {/* ── Company ─────────────────────────────────────────── */}
       <section className="card mt-4 p-6">

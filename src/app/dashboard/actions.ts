@@ -102,15 +102,36 @@ export async function logReply(contactId: string, formData: FormData) {
   revalidatePath("/dashboard");
 }
 
-/** Free-text remarks. Human-written, never touched by the model. */
-export async function saveRemarks(contactId: string, formData: FormData) {
+/** What the remarks form renders back to the user after a submit. */
+export type RemarksResult = { status: "idle" | "saved" | "error"; message?: string };
+
+/**
+ * Free-text remarks. Human-written, never touched by the model.
+ *
+ * Returns a result rather than nothing: a write with no visible outcome is
+ * indistinguishable from a write that silently failed, and the Supabase error
+ * was previously discarded without anyone seeing it.
+ */
+export async function saveRemarks(
+  contactId: string,
+  _prev: RemarksResult,
+  formData: FormData,
+): Promise<RemarksResult> {
   const supabase = await createServerSupabase();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  if (!user) return { status: "error", message: "Not signed in." };
 
-  const remarks = String(formData.get("remarks") ?? "");
+  const remarks = String(formData.get("remarks") ?? "").trim();
   const admin = createAdminClient();
-  await admin.from("contacts").update({ remarks }).eq("id", contactId);
+  const { error } = await admin
+    .from("contacts")
+    .update({ remarks: remarks || null })
+    .eq("id", contactId);
+
+  if (error) return { status: "error", message: error.message };
 
   revalidatePath(`/dashboard/${contactId}`);
+  // The contact list carries a "Has remarks" badge off the same column.
+  revalidatePath("/dashboard");
+  return { status: "saved" };
 }
