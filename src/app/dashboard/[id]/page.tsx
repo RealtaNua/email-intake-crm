@@ -12,6 +12,7 @@ import {
 import { LocalTime } from "@/components/local-time";
 import { MessageView } from "@/components/message-view";
 import { NextStep } from "@/components/next-step";
+import { isRealThread } from "@/lib/threads";
 import { RemarksForm } from "@/components/remarks-form";
 import { ReplyComposer } from "@/components/reply-composer";
 import { LiveRecord } from "@/components/live-record";
@@ -65,6 +66,10 @@ export default async function ContactPage({
   // Prefill the composer with the subject of what we are answering, so the
   // reply threads in their client instead of starting a new conversation.
   // enquiries is newest-first, so this is the message being answered.
+  // Read from the messages, not a flag on the contact: a thread is replyable
+  // because something in it genuinely came through the mail server.
+  const canSend = await isRealThread(id);
+
   const replySubject = replySubjectFor(
     enquiries.find((e) => e.direction === "inbound")?.subject,
   );
@@ -318,6 +323,7 @@ export default async function ContactPage({
         <ReplyComposer
           to={contact.email}
           defaultSubject={replySubject}
+          canSend={canSend}
           action={async (_prev: ReplyResult, formData: FormData) => {
             "use server";
             return sendReply(id, _prev, formData);

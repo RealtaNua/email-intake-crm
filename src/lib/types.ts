@@ -115,6 +115,12 @@ export function replySubjectFor(subject: string | null | undefined): string {
   return base ? `Re: ${base}` : "";
 }
 
+/** Shown in the composer's dialog and returned by the server. One wording. */
+export const DEMO_THREAD_MESSAGE =
+  "This is a demo email thread. You can't reply to it, because no message in " +
+  "it ever passed through the mail server — replying would send real email to " +
+  "an address that was made up for testing.";
+
 export const PRIORITY_LABELS: Record<string, string> = {
   urgent: "Urgent",
   high: "High priority",

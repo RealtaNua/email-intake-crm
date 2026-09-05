@@ -6,7 +6,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { enrichCompany } from "@/lib/enrichment";
 import { classifyEnquiry } from "@/lib/classification";
 import { sendReplyEmail, replyFromAddress } from "@/lib/mailgun";
-import { replySubjectFor } from "@/lib/types";
+import { replySubjectFor, DEMO_THREAD_MESSAGE } from "@/lib/types";
+import { isRealThread } from "@/lib/threads";
 
 /**
  * Re-run enrichment and classification for one enquiry.
@@ -93,6 +94,15 @@ export async function sendReply(
     .from("contacts").select("email, name").eq("id", contactId).single();
   if (!contact) return { status: "error", message: "Contact not found." };
 
+  // The seed contacts sit at real domains — grabtaxi.com, hubspot.com — and
+  // read convincingly enough to click Send on by mistake. A thread earns the
+  // right to be replied to by containing at least one message that genuinely
+  // came through Mailgun. Checked here, on the server, because the composer's
+  // own check is a courtesy and a server action is a public endpoint.
+  if (!(await isRealThread(contactId))) {
+    return { status: "error", message: DEMO_THREAD_MESSAGE };
+  }
+
   // Thread against the most recent inbound message so the reply lands in the
   // same conversation in their mail client rather than as a fresh email.
   const { data: lastInbound } = await admin
@@ -127,6 +137,9 @@ export async function sendReply(
       contact_id: contactId,
       direction: "outbound",
       origin: "crm",
+      // Our own send, through Mailgun. Real by construction, and it keeps the
+      // thread replyable once the contact answers.
+      verified_real: true,
       // Mailgun's own id. If this reply is also BCC'd back to the intake
       // address, the unique index rejects the copy instead of double-posting.
       message_id: messageId,

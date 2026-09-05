@@ -122,6 +122,9 @@ export async function POST(request: Request) {
         contact_id: existing.id,
         direction: "outbound",
         origin: "email_client",
+        // It reached this handler, so it cleared the HMAC check above. That
+        // is the whole proof: nothing else can write a true here.
+        verified_real: true,
         message_id: normalizeMessageId(field("Message-Id") ?? field("message-id")),
         sender_email: senderEmail,
         sender_name: parsed.name,
@@ -165,6 +168,7 @@ export async function POST(request: Request) {
     .from("enquiries")
     .insert({
       contact_id: contactId,
+      verified_real: true,
       message_id: normalizeMessageId(field("Message-Id") ?? field("message-id")),
       sender_email: senderEmail,
       sender_name: parsed.name,
