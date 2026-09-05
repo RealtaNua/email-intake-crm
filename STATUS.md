@@ -6,7 +6,7 @@ this file holds everything that changes.
 
 **Keep it current.** It is loaded as fact, so anything stale here is read as true.
 
-Last updated: 2026-08-28 · 45 commits · 11 migrations
+Last updated: 2026-09-05 · 62 commits · 13 migrations
 
 ---
 
@@ -59,9 +59,9 @@ Added after the fact, in response to how the thing actually behaved:
   and the message timeline. Requires migration 0010 applied before deploy — see
   the ordering note below.
 
-Migrations `0010` and `0011` are applied to the live database (`supabase db push`,
-2026-08-28). Migration history had not recorded `0010` even though its columns
-existed — the push applied both idempotently.
+Migrations through `0013` are applied to the live database (`supabase db push`,
+`0012`–`0013` on 2026-09-05). Migration history had not recorded `0010` even
+though its columns existed — that push applied it idempotently.
 
 - **Raw model output is stored** (0011). `enquiries.classification_raw` holds the
   full tool-call decision from the most recent classification, overwritten on
@@ -76,6 +76,36 @@ existed — the push applied both idempotently.
 - **`reprocess.ts` no longer re-researches a company that already has a profile**
   — pass `--research` to force it. Research is ~55k input tokens versus ~3k for a
   classification, so every debugging run was silently buying the expensive one.
+- **Remarks save visibly** and render as a record rather than only as the textarea
+  that wrote them. The Notes card is hidden until something writes to it.
+- **The CRM sends real email** (0012). `sendReply` posts to the Mailgun API from
+  `intake@mg.storyworks.asia` and threads via `In-Reply-To`. The mail goes out
+  *before* the row is written, so a failed send cannot leave a record claiming we
+  replied. Mailgun's returned `Message-Id` is stored, so a BCC copy of a CRM-sent
+  reply dedupes against the unique index instead of double-posting.
+- **Replies carry an `origin`** (0012): `crm`, `email_client` (BCC captured), or
+  `manual` (typed into the log form). Shown on every outbound message, because
+  "did I send that from here or from my phone?" should not depend on memory.
+- **BCC capture works** — two bugs fixed, neither previously exercised.
+  `parseFromHeader` is anchored and returned one address, so a two-recipient `To`
+  matched the last one and a contact in `Cc` matched nothing; `parseAddressList`
+  now reads every recipient in order. And an unmatched own-message fell through
+  to the enquiry path, where the sender is the operator — filing our outbound
+  mail as an inbound enquiry and creating a contact for ourselves. That is what
+  the `CS Koh` contact row is.
+- **The contact record updates itself** (0012 adds `enquiries` and `contacts` to
+  the realtime publication). `LiveRecord` subscribes with the anon key — realtime
+  respects RLS — and falls back to a 5s poll when the socket does not connect.
+  Triage lands 30–90s behind its row, and refreshing early shows a blank pending
+  row that reads as broken.
+- **Sending is refused on threads that never passed through the mail server**
+  (0013). `enquiries.verified_real` is set only by code holding proof: the
+  webhook, where the row exists because it cleared the HMAC check, and our own
+  API sends. A thread is replyable if any message in it is real. Backfilled from
+  evidence — genuine mail carries `X-Mailgun-Incoming` and the original transport
+  headers; the fixtures were inserted with five hand-written fields. Blocked
+  threads get a dialog in the composer, and `sendReply` refuses independently
+  because a server action is a public endpoint.
 
 ## Current data
 
@@ -87,10 +117,16 @@ classified: "hihi test to claude" and "Corporate storytelling workshop for 200
 staff". `enquiries.body_full` is also null on Priya Menon's message. Neither is
 diagnosed yet.
 
-⚠️ **The data is fabricated.** Jane Tan, Daniel Lim, Marcus Webb, Priya Menon, Serene
-Ho, and the SGD 42,000 proposal are all test fixtures written during the build. They
-read convincingly, which is exactly the problem. Clear them before any demo, or be
-ready to say plainly that they are synthetic.
+⚠️ **The data is fabricated, and this is now established fact rather than memory.**
+Exactly one message in the database is real: `chinsiongk@gmail.com` /
+"hihi test to claude". Jane Tan, Daniel Lim, Marcus Webb, Priya Menon, Farhan Aziz
+and the SGD 42,000 proposal are all fixtures. They read convincingly, which is
+exactly the problem — say plainly that they are synthetic, or clear them.
+
+Since `0013` this is enforced rather than remembered: only the `CS Koh` contact can
+be replied to. Every fixture thread refuses to send, which matters because Jane,
+Daniel and Marcus sit at **real domains** (grabtaxi.com, hubspot.com) and a
+mistaken click would put real mail into a real company's servers from our domain.
 
 ## Open items
 
@@ -115,7 +151,18 @@ ready to say plainly that they are synthetic.
    guess here 400s every classification until reverted (soft: rows still land,
    status ends up `failed`). Test with one call before trusting it.
 7. **Two enquiries never classified**, both at `classification_status = pending`.
-   Cause unknown — possibly the daily cap, possibly a failed early run.
+   Cause unknown — possibly the daily cap, possibly a failed early run. One of
+   them is the only genuinely real message in the database.
+8. **Sending and live refresh are unverified in a browser.** Built, deployed and
+   checked against the database, but the composer's dialog, the realtime socket
+   connecting, and a real send through Mailgun have never been exercised by a
+   logged-in human. **No email has ever been sent from the app.** A trial Mailgun
+   account also restricts sending to authorized recipients; the composer surfaces
+   Mailgun's error verbatim if so.
+9. **The `CS Koh` contact is an artefact of the BCC bug**, not a real enquirer —
+   our own message filed as an inbound enquiry. It is also, awkwardly, the only
+   thread the app will now let you reply to. Delete it and nothing is replyable
+   until a genuine email arrives.
 
 ## Cost
 
@@ -139,6 +186,7 @@ All secrets are in `.env.local` (gitignored) and in Vercel production + preview.
 | `ANTHROPIC_API_KEY` | set |
 | `MAILGUN_SIGNING_KEY` / `_API_KEY` / `_DOMAIN` / `_REGION` | set |
 | `OWNER_EMAILS` | `chinsiongk@gmail.com` — enables BCC reply capture |
+| `MAILGUN_FROM` | **not set**, and optional — defaults to `intake@<MAILGUN_DOMAIN>` |
 | `ENRICHMENT_DAILY_CAP` | 25 |
 
 ⚠️ The Mailgun API key was pasted into a chat transcript during setup and should be
@@ -154,6 +202,10 @@ rotated. Its only remaining use is reading routes, so rotating it is low risk.
 
 ## Next session
 
-Start with step 8. Propose the tool schema first — which fields the chat may write is
-a design decision, not an implementation detail. Everything else on the list above is
-optional polish.
+Step 8 is still the only outstanding build item. Propose the tool schema first —
+which fields the chat may write is a design decision, not an implementation detail.
+
+Before that, the cheap and worthwhile thing: send one real email to yourself
+through the composer and reply to it from Gmail with the intake address BCC'd.
+That exercises sending, capture, `origin` labelling, dedupe and live refresh in
+one pass, and every one of them is currently unproven end to end.
