@@ -20,6 +20,15 @@ condition of debugging, and what matters is what corrects it.
 - [9. Summaries describing the wrong message](#9-summaries-describing-the-wrong-message)
 - [10. Every timestamp was in the wrong timezone](#10-every-timestamp-was-in-the-wrong-timezone)
 - [11. A dark-mode rule nobody had looked at](#11-a-dark-mode-rule-nobody-had-looked-at)
+- [12. Summary tiles that did not count the messages](#12-summary-tiles-that-did-not-count-the-messages)
+- [13. "Urgent" and "waiting on us" are different questions](#13-urgent-and-waiting-on-us-are-different-questions)
+- [14. `reprocess.ts` always printed the same "20 calls ≈ $2.03"](#14-reprocessts-always-printed-the-same-20-calls--203)
+- [15. A summary that just said "ignore"](#15-a-summary-that-just-said-ignore)
+- [16. Every reprocess re-researched a company it already knew](#16-every-reprocess-re-researched-a-company-it-already-knew)
+- [17. Remarks that saved perfectly and looked broken](#17-remarks-that-saved-perfectly-and-looked-broken)
+- [18. A contact for ourselves](#18-a-contact-for-ourselves)
+- [19. The fix that would have silently eaten every test email](#19-the-fix-that-would-have-silently-eaten-every-test-email)
+- [20. Convincing fake contacts, at real companies, once the app could send](#20-convincing-fake-contacts-at-real-companies-once-the-app-could-send)
 - [What these have in common](#what-these-have-in-common)
 
 ---
@@ -688,9 +697,173 @@ reasonable in `reprocess.ts`; only running the two together shows the cost.
 
 ---
 
+## 17. Remarks that saved perfectly and looked broken
+
+**Symptom** — Reported by the owner: *"Double check if the special remarks section
+is saving the remarks properly. There's no indication after I pressed save. And if
+it's saved, the remarks are not shown anywhere."*
+
+**Diagnosis** — Went to the system of record before touching the write path, and
+queried the row directly with the service-role key:
+
+```
+"Farhan Aziz" → remarks: "We worked together before on another 3 hour training
+project in 2024.\r\nPrefers simple and direct communication."
+```
+
+Saving had never been broken. Not once.
+
+**Cause** — Three separate defects, none of them in the write, all of them
+downstream of it:
+
+1. `saveRemarks` discarded the Supabase result entirely. It returned nothing on
+   success **and** nothing on failure, so a broken save and a working one produced
+   byte-identical experiences. The error object was thrown away unread.
+2. The saved value only ever appeared as the textarea's `defaultValue`. A record
+   rendered into the box that wrote it reads as an unsaved draft, not as something
+   on file.
+3. `revalidatePath` covered `/dashboard/[id]` but not `/dashboard`, where the
+   contact list renders a "Has remarks" badge off the same column. Adding remarks
+   did not light the badge until something unrelated invalidated the list.
+
+**Fix** — The action returns a `RemarksResult`; the form renders "Saving…", a green
+"Saved", or the Supabase error verbatim. Saved remarks render as a read-only block
+with an Edit button, preserving line breaks. Both paths revalidate.
+
+**Lesson** — **A write with no visible outcome is indistinguishable from a write
+that failed.** The owner's report was a completely reasonable reading of the
+evidence available to them; the evidence was just missing. Note also the direction
+this could have gone: the obvious response to "it isn't saving" is to start
+rewriting the save. Checking the database first cost one query and ruled out the
+entire write path before a line was changed.
+
+---
+
+## 18. A contact for ourselves
+
+**Symptom** — The `contacts` table held a row for `CS Koh <chinsiongk@gmail.com>` —
+the operator — sitting in the CRM as though they were an enquirer, attached to a
+test message reading "hihi test to claude". Nobody had created it.
+
+**Diagnosis** — Found while answering a question the owner asked about something
+else: whether the system could capture replies they sent from their own mail
+client. Reading the BCC-capture branch to answer it turned up two faults, neither
+of which had ever been exercised, because the branch had never once run in
+production.
+
+**Cause** — Two, compounding:
+
+1. `parseFromHeader` is anchored (`/^\s*(.*?)\s*<([^>]+)>\s*$/`). That is correct
+   for a `From` header, which holds one address, and wrong for `To` or `Cc`: given
+   `A <a@x>, B <b@y>` it matches only the **last** address. A reply to two people
+   attached to the wrong contact; a contact sitting in `Cc` matched nothing.
+2. When no contact matched, the branch fell through to the normal enquiry path.
+   On that path the sender is the operator — so `resolveContact` did exactly what
+   it is built to do and created a contact for the sender. Our own mail, filed as
+   an inbound enquiry from ourselves.
+
+**Fix** — `parseAddressList` reads every recipient in header order, respecting
+angle brackets and quoted display names. An unmatched own-message is dropped
+rather than falling through.
+
+**Lesson** — **"Fall through to the normal path" is only safe when the normal path
+is correct for that input.** Here the branch existed precisely to deny the normal
+path's central assumption — that the sender is the enquirer — and then handed the
+message to it anyway when it could not finish the job.
+
+---
+
+## 19. The fix that would have silently eaten every test email
+
+**Symptom** — None yet. Caught before it could produce one, while writing up
+entry 18, by checking what the stored real message actually contained:
+
+```
+sender:    chinsiongk@gmail.com
+To:        intake@mg.storyworks.asia
+recipient: intake@mg.storyworks.asia
+```
+
+**Cause** — The fix in entry 18 was right about the fall-through and wrong about
+the condition guarding it. It treated *any* mail from an owner address as our own
+outbound copy. But that message is not a reply — it is addressed **to** the intake
+address. It is the owner emailing the system, which is how the owner tests it and
+is otherwise the most ordinary path there is.
+
+Under the new code that message would have matched `isOwnReply`, found no known
+recipient, and been **dropped with a 200**. Silently. The webhook would have logged
+`own message with no known recipient, skipped` and Mailgun would have been told
+everything was fine. The previous behaviour — creating a contact for ourselves —
+was wrong, but at least it was visibly wrong. This would have looked like mail
+that never arrived, which is entry 6 all over again, except self-inflicted and with
+a plausible cause already written into the code.
+
+**Fix** — The discriminator is not who sent it. It is whether the intake address is
+among the **visible** recipients:
+
+- Intake address in `To` or `Cc` → the message was addressed to us → enquiry, even
+  from the owner.
+- Intake address absent from both → we were BCC'd on mail written to someone else
+  → our own reply.
+
+```ts
+const isOwnReply = owners.includes(senderEmail) && !addressedToUs;
+```
+
+**Lesson** — **A branch keyed on the sender was answering the wrong question.**
+"Who wrote this?" does not distinguish a reply from an enquiry; "was this addressed
+to us, or were we copied on it?" does, and that fact is sitting in the headers. Two
+further things worth keeping: the bug was found by reading the one piece of real
+data in the system rather than reasoning about the code, and a fix shipped hours
+earlier is still a fix that needs its own review.
+
+---
+
+## 20. Convincing fake contacts, at real companies, once the app could send
+
+**Symptom** — No failure. A capability and a hazard that met: the CRM gained the
+ability to send real email through the Mailgun API, and the database was full of
+fixtures written during the build to read convincingly — `jane.tan@grabtaxi.com`,
+`marcus.webb@hubspot.com`, `daniel.lim@grabtaxi.com`. Those are real domains with
+real mail servers. One click on Send would have put genuine mail into a real
+company's inbox, from the owner's domain, addressed to somebody who does not exist.
+
+**Diagnosis** — The owner asked whether the database could distinguish real
+messages from invented ones. It can, and the evidence is unambiguous. A message
+that genuinely passed through Mailgun's inbound route carries the full transport
+header set; the fixtures were inserted with exactly the five fields a person types
+by hand:
+
+```
+real     Arc-Seal, Authentication-Results, Dkim-Signature, Received,
+         X-Mailgun-Incoming, message-headers, body-html, stripped-html … (29)
+fixture  Message-Id, from, recipient, stripped-text, subject               (5)
+```
+
+Exactly one message in the database is real.
+
+**Fix** — `enquiries.verified_real`, backfilled from that evidence rather than by
+recognising names, and afterwards set only by code that holds proof: the webhook,
+where a row exists *because* it cleared the HMAC check, and our own API sends. A
+thread may be replied to if any message in it is real, so a contact becomes
+replyable the moment they actually write in. Blocked threads raise a dialog in the
+composer, and `sendReply` refuses independently — a server action is a public
+endpoint, so a client-side check is an explanation, not enforcement.
+
+**Lesson** — **Seed data becomes dangerous at exactly the moment the system gains
+the power to act on it.** It was harmless for the entire build and hazardous the
+hour sending shipped, and nothing about the fixtures changed in between. Worth
+asking of any new capability: what does it do to the data already sitting there?
+The realness flag is also deliberately derived from what happened rather than
+declared — a column a form or a model could write is not evidence of anything.
+
+---
+
 ## What these have in common
 
-Entries 6 and 7 are the same mistake twice:
+Entries 6, 7 and 19 are the same mistake three times, and the third was nearly
+self-inflicted — a fix that would have answered a real email with a silent 200 and
+a log line saying it had been skipped on purpose:
 
 > An empty result at one moment in time was treated as a permanent state.
 
@@ -732,7 +905,14 @@ Three further patterns from the other entries:
 
 3. **Silent failure costs more than loud failure.** The two most expensive bugs here
    — entries 4 and 5 — produced no error anywhere. Neither was complicated once
-   visible.
+   visible. Entry 17 is the mirror image: nothing failed at all, but the interface
+   said nothing either, and a working feature was reported as broken because a
+   successful write and a failed one looked exactly the same.
+
+6. **Check the record before rewriting the code.** Entry 17 was reported as a broken
+   save and was not one; a single query settled it before anything was touched.
+   Entry 19 was found the same way, by reading the one real row in the database
+   rather than reasoning about what the handler ought to do with it.
 
 4. **Keep the data needed to answer the question you will be asked.** Entry 8 was
    unanswerable not because the system was broken but because it recorded a total

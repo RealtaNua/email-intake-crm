@@ -86,16 +86,29 @@ export async function POST(request: Request) {
   // is simply off and replies are logged manually instead.
   const owners = (process.env.OWNER_EMAILS ?? "")
     .split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-  const isOwnReply = owners.includes(senderEmail);
+
+  // Being from the owner is not enough to make a message our own reply. Mail
+  // the owner addresses TO the intake address is an enquiry — that is how the
+  // owner tests the system, and it is the ordinary path for anyone.
+  //
+  // What distinguishes a reply is that the intake address is not among the
+  // visible recipients: we were BCC'd on a message written to someone else.
+  const visibleRecipients = [
+    ...parseAddressList(field("To") ?? field("to")),
+    ...parseAddressList(field("Cc") ?? field("cc")),
+  ];
+  const intakeAddress = field("recipient")?.trim().toLowerCase() ?? null;
+  const addressedToUs = intakeAddress
+    ? visibleRecipients.includes(intakeAddress)
+    : false;
+
+  const isOwnReply = owners.includes(senderEmail) && !addressedToUs;
 
   if (isOwnReply) {
     // Every recipient, not just the first: a reply addressed to two people, or
     // one where the contact sits in Cc, previously matched the wrong record or
     // none at all. parseFromHeader is anchored and returns a single address.
-    const candidates = [
-      ...parseAddressList(field("To") ?? field("to")),
-      ...parseAddressList(field("Cc") ?? field("cc")),
-    ].filter((email) => !owners.includes(email));
+    const candidates = visibleRecipients.filter((email) => !owners.includes(email));
 
     const { data: matches } = candidates.length
       ? await supabase.from("contacts").select("id, email").in("email", candidates)
@@ -108,10 +121,10 @@ export async function POST(request: Request) {
       .find(Boolean);
 
     if (!existing) {
-      // Our own message to nobody we have a record of. Falling through to the
-      // normal path here is what created a contact for the operator: the
-      // sender is us, so resolveContact would file the message as an enquiry
-      // from ourselves. Drop it instead.
+      // A BCC'd copy of a message written to someone we have no record of.
+      // Falling through to the normal path here is what created a contact for
+      // the operator: the sender is us, so resolveContact would file our own
+      // outbound mail as an enquiry from ourselves. Drop it instead.
       console.log("[inbound] own message with no known recipient, skipped");
       return NextResponse.json({ ok: true, skipped: "own message, unknown recipient" }, { status: 200 });
     }

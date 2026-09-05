@@ -172,10 +172,16 @@ Each cost real time. Full write-ups in `TROUBLESHOOTING.md`.
     `From` header and wrong for `To` or `Cc`: on `A <a@x>, B <b@y>` it matches only
     the last. Use `parseAddressList` for any recipient list. A reply addressed to two
     people, or one with the contact in `Cc`, attached to the wrong record or to none.
-15. **An unmatched own-message must be dropped, never allowed to fall through.** In
-    the BCC path the sender is the operator, so continuing to the normal enquiry path
-    files our own outbound mail as an *inbound enquiry* and creates a contact for
-    ourselves. The `CS Koh` contact row is that bug's artefact.
+15. **What makes a message "our own reply" is the BCC, not the sender.** Mail the
+    owner addresses TO the intake address is an ordinary enquiry — it is how the
+    system gets tested. A reply is recognised by the intake address being absent
+    from `To` and `Cc`, i.e. we were copied on mail written to someone else. Keying
+    this on `OWNER_EMAILS` alone silently swallows every test email with a 200.
+    Once in that branch, an unmatched message must be **dropped**, never allowed to
+    fall through: on the normal path the sender is the operator, so `resolveContact`
+    files our own outbound mail as an inbound enquiry and creates a contact for
+    ourselves. The `CS Koh` row is that bug's artefact. See `TROUBLESHOOTING.md`
+    18 and 19 — the first fix here was wrong in an instructive way.
 16. **Send the mail before writing the row, and never write one for a send that
     failed.** A record claiming we replied when nothing left the building is worse
     than no record: the dashboard then shows the thread as handled and it drops off
