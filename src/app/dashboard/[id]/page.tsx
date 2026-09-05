@@ -178,27 +178,26 @@ export default async function ContactPage({
         )}
       </section>
 
-      {/* ── Notes ───────────────────────────────────────────── */}
-      <section className="card mt-4 p-6">
-        <h2 className="text-sm font-semibold text-ink">Notes</h2>
-        {contact.notes?.length ? (
+      {/* ── Notes ───────────────────────────────────────────────
+          Model-written, unlike remarks above. Nothing writes here until
+          step 8 ships, so the card is hidden rather than shown empty: a
+          card whose only content explains its own emptiness is noise. */}
+      {contact.notes?.length ? (
+        <section className="card mt-4 p-6">
+          <h2 className="text-sm font-semibold text-ink">Notes</h2>
           <ul className="mt-2 space-y-2">
             {contact.notes.map((note, i) => (
-              <li key={i} className="rounded-lg border border-slate-200 p-3">
-                <p className="text-sm text-slate-700">{note.text}</p>
-                <p className="mt-1 text-xs text-slate-400">
+              <li key={i} className="rounded-lg bg-page p-3">
+                <p className="text-sm text-ink">{note.text}</p>
+                <p className="mt-1 text-xs text-ink-muted">
                   <LocalTime iso={note.created_at} />
                   {note.source ? ` · ${note.source}` : ""}
                 </p>
               </li>
             ))}
           </ul>
-        ) : (
-          <p className="mt-2 text-sm text-slate-500">
-            No notes yet. The chat interface (step 8) writes here.
-          </p>
-        )}
-      </section>
+        </section>
+      ) : null}
 
       {/* ── Conversation timeline ───────────────────────────── */}
       <section className="card mt-4 p-6">
