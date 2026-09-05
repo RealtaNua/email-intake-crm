@@ -45,6 +45,18 @@ single most expensive operation here and the cost is invisible from the command.
   re-researched.
 - To verify a fix, test on a **single message**, not a whole contact.
 
+**The app sends real email. Never trigger a send.**
+
+`sendReply` puts actual mail into someone's inbox from `intake@mg.storyworks.asia`.
+It is outward-facing and irreversible, and most of the contacts in the database are
+fixtures sitting at real domains — grabtaxi.com, hubspot.com.
+
+- Only the owner clicks Send. Do not call the action, do not POST to Mailgun, and
+  do not "test" it with a harmless-looking message.
+- `verified_real` is the guard, not a suggestion. A thread with no genuinely
+  delivered message refuses to send, on the server as well as in the browser.
+  Never loosen that to make something easier to test.
+
 **Commit in small, real increments.** The "live debugging" requirement is met through
 honest git history.
 
@@ -65,9 +77,10 @@ companies  (one per domain)   profile, enrichment_status
     ^
 contacts   (one per sender)   name, status, notes[], total_received, remarks,
     ^                         next_step, conversation_status
-enquiries  (one per MESSAGE)  direction, subject, body_plain, body_full,
-                              summary, priority, priority_reasoning,
-                              suspected_phishing, phishing_reasoning
+enquiries  (one per MESSAGE)  direction, origin, verified_real, subject,
+                              body_plain, body_full, summary, priority,
+                              priority_reasoning, suspected_phishing,
+                              phishing_reasoning
 ```
 
 **Contacts are the unit of the CRM.** The dashboard lists contacts, not emails.
@@ -89,6 +102,17 @@ enquiries  (one per MESSAGE)  direction, subject, body_plain, body_full,
 - **`remarks` is human-only**; the model never writes it. `notes` is model-writable.
 - **Our own replies are not triaged** — outbound uses a smaller tool that returns
   only a summary, next step, and status.
+- **A reply can arrive three ways, and `origin` says which.** `crm` (sent by this
+  app through the Mailgun API), `email_client` (you replied from your own mail
+  client and BCC'd the intake address), `manual` (an answer given by phone or in
+  person, typed into the log form — no email exists). All three sit in one
+  timeline. Null on inbound.
+- **`verified_real` is evidence, not a label anyone may set.** It is true only on
+  rows written by code holding proof: the webhook, where a row exists *because* it
+  cleared the HMAC check, and our own API sends. A thread may be replied to if any
+  message in it is true. It is deliberately computed from the messages rather than
+  stored on the contact — a column a form or a model could write is not evidence.
+  It is hidden from the UI; its only job is to refuse a send.
 - **`body_plain` is stripped text for the model; `body_full` is unstripped for the
   reader**, so sign-offs survive.
 
@@ -144,6 +168,34 @@ Each cost real time. Full write-ups in `TROUBLESHOOTING.md`.
     declared broken because a check ran too early. "Not yet" and "never" are the same
     observation. Consult the authority — Mailgun's event stream, the call log,
     `email_confirmed_at` — rather than polling and inferring.
+14. **`parseFromHeader` is anchored and returns ONE address.** That is correct for a
+    `From` header and wrong for `To` or `Cc`: on `A <a@x>, B <b@y>` it matches only
+    the last. Use `parseAddressList` for any recipient list. A reply addressed to two
+    people, or one with the contact in `Cc`, attached to the wrong record or to none.
+15. **An unmatched own-message must be dropped, never allowed to fall through.** In
+    the BCC path the sender is the operator, so continuing to the normal enquiry path
+    files our own outbound mail as an *inbound enquiry* and creates a contact for
+    ourselves. The `CS Koh` contact row is that bug's artefact.
+16. **Send the mail before writing the row, and never write one for a send that
+    failed.** A record claiming we replied when nothing left the building is worse
+    than no record: the dashboard then shows the thread as handled and it drops off
+    everything that counts what is owed. If the send succeeds and the insert fails,
+    say "sent, but not recorded" — reporting that as a send failure is a lie.
+17. **Message-Ids must be normalised on both paths or dedupe silently fails.** The id
+    Mailgun returns on send and the `Message-Id` header on the BCC copy are the same
+    id, but not the same string — angle brackets and case vary by hop.
+    `normalizeMessageId` is what lets the unique index collapse a CRM-sent reply
+    against its own BCC copy instead of posting it twice.
+18. **A `"use server"` file can only export async functions.** A constant or a type
+    helper exported from `actions.ts` fails the build with "found string", and only
+    at page-data collection, not compile. Worse, *every* export there is a publicly
+    callable endpoint — internal reads belong in a plain module (`lib/threads.ts`),
+    shared constants in `lib/types.ts`.
+19. **Realtime is a fallback-needing dependency, not a guarantee.** A subscription
+    that never connects — publication membership missing, socket blocked — leaves the
+    page frozen with nothing on screen to say so. `LiveRecord` polls every 5s
+    whenever the channel is not `SUBSCRIBED`, and shows which mode it is in. Realtime
+    respects RLS, so subscribing with the anon key exposes nothing new.
 
 ---
 
@@ -168,6 +220,14 @@ Each cost real time. Full write-ups in `TROUBLESHOOTING.md`.
    insert or delete** — rows come only from the webhook via `service_role`.
 8. **Sender history is split** into same-address and same-domain. Merging them would
    imply a relationship with someone who has never written.
+9. **Outbound mail goes through the Mailgun API, from the intake address**, so a
+   reply lands back in the same webhook when it is answered. Threading is set with
+   `In-Reply-To`/`References` against the last inbound message.
+10. **The record keeps itself current.** Triage runs in `after()` and lands 30–90s
+    behind the row it belongs to, and a reply captured from the mail client arrives
+    with no user action at all. Both used to need a manual reload, and reloading too
+    early shows a blank pending row that reads as broken — gotcha 13, turned on
+    yourself in front of an audience.
 9. **Styling is Tailwind**, committed to a single light theme. See the design system
    below before adding any UI.
 
@@ -241,6 +301,9 @@ copy-pasted across three files and were already drifting before `Badge` existed.
 | `Chevron` | Expand/collapse arrow for a `<details>` summary. Needs `group` on the `<details>`; no client JS. |
 | `MessageView` | An email rendered as an email: header block, body, sign-off. |
 | `NavLink` | Nav pill with active state, styled for the gradient header. |
+| `RemarksForm` | Human remarks: renders the saved value as a record, edits on demand, confirms the save. |
+| `ReplyComposer` | Sends a real email. Blocks demo threads with a dialog. |
+| `LiveRecord` | Realtime subscription for one contact, with a polling fallback. |
 
 ### Colour carries meaning — keep it scarce
 
@@ -288,12 +351,16 @@ src/
     dashboard/[id]/page.tsx   Contact record
     dashboard/companies/      Companies, one row per researched domain
     dashboard/usage/          Per-call cost log
-    dashboard/actions.ts      reprocessContact, reprocessEnquiry, logReply, saveRemarks
+    dashboard/actions.ts      reprocessContact, reprocessEnquiry, sendReply,
+                              logReply, saveRemarks  (every export is public)
     api/inbound/mailgun/      Webhook: verify -> insert -> 200 -> after()
-  components/                 Badge, StatTile, NextStep, LocalTime, MessageView, NavLink
+  components/                 Badge, StatTile, NextStep, LocalTime, MessageView,
+                              NavLink, Chevron, RemarksForm, ReplyComposer,
+                              LiveRecord
   lib/
     env.ts                    requireEnv() — SERVER ONLY (see gotcha 1)
-    mailgun.ts                HMAC verification, From header parsing
+    mailgun.ts                HMAC verification, address parsing, sending
+    threads.ts                isRealThread() — may this thread be replied to
     claude.ts                 Client, MODEL, RATES, cap claim, per-call logging
     contacts.ts               resolveContact() — upsert company + contact
     enrichment.ts             enrichCompany() — per domain, once
@@ -301,7 +368,7 @@ src/
     business-context.ts       EDITABLE business rules driving triage judgment
     personal-domains.ts       gmail.com etc — skip research
 scripts/reprocess.ts          Ops backfill (permission required)
-supabase/migrations/          0001-0009
+supabase/migrations/          0001-0013
 ```
 
 ---
@@ -325,6 +392,10 @@ npx tsx scripts/reprocess.ts --all
 # Migrations (IPv4 pooler — direct connections are refused, see gotcha 4)
 supabase db push --db-url "postgresql://postgres.<ref>:<pw>@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
 ```
+
+`MAILGUN_FROM` is optional and defaults to `intake@<MAILGUN_DOMAIN>`. A trial Mailgun
+account restricts sending to authorized recipients; the composer surfaces Mailgun's
+error verbatim rather than failing quietly.
 
 **Every new env var must be added to `.env.local` *and* Vercel** (production and
 preview) or it works locally and 500s in production. `NEXT_PUBLIC_*` needs

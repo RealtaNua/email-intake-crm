@@ -109,8 +109,8 @@ though its columns existed — that push applied it idempotently.
 
 ## Current data
 
-6 contacts · 2 companies · 10 messages (2 still unclassified) · 8 Claude calls
-today (~$0.95)
+6 contacts · 2 companies · 10 messages (2 still unclassified) · 1 of them genuinely
+real. No Claude calls since 2026-08-28 (20 calls on the 27th, 10 on the 28th).
 
 ⚠️ Two enquiries sit at `classification_status = pending` and have never been
 classified: "hihi test to claude" and "Corporate storytelling workshop for 200
@@ -140,8 +140,9 @@ mistaken click would put real mail into a real company's servers from our domain
 3. **Supabase free-tier pause.** Documented as a limitation; no keep-alive built.
 4. **Step 8, the chat interface.** Target columns already exist on `contacts`:
    `notes`, `total_received`, `status`. Propose the tool schema before writing code.
-5. **Per-call log is empty.** Logging began after the first 20 calls, which exist
-   only as a daily total. It populates from the next real email.
+5. **The per-call log covers only the second day.** `claude_calls` holds 10 rows;
+   the first 20 calls predate the logging and exist only as a daily total in
+   `claude_usage`. Nothing has been spent since 2026-08-28.
 6. **`phishing_reasoning` is a required field with nothing to say when the flag is
    false.** The schema asks for an empty string; on a real call the model returned
    the stray markup `"</antmlifake>"` instead. Code now discards it, but the
