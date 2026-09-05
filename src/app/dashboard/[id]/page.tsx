@@ -1,15 +1,26 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createServerSupabase, getUser } from "@/lib/supabase/server";
-import { reprocessContact, logReply, saveRemarks, type RemarksResult } from "../actions";
+import {
+  reprocessContact,
+  logReply,
+  sendReply,
+  saveRemarks,
+  type RemarksResult,
+  type ReplyResult,
+} from "../actions";
 import { LocalTime } from "@/components/local-time";
 import { MessageView } from "@/components/message-view";
 import { NextStep } from "@/components/next-step";
 import { RemarksForm } from "@/components/remarks-form";
+import { ReplyComposer } from "@/components/reply-composer";
+import { LiveRecord } from "@/components/live-record";
 import { Chevron } from "@/components/chevron";
 import { Badge, PRIORITY_TONE, CONVERSATION_TONE } from "@/components/badge";
 import {
   CONVERSATION_LABELS,
+  ORIGIN_LABELS,
+  replySubjectFor,
   attentionLevel,
   type Contact,
   type Company,
@@ -51,6 +62,13 @@ export default async function ContactPage({
   const enquiries = (enquiryData ?? []) as Enquiry[];
   const profile = contact.companies?.profile ?? null;
 
+  // Prefill the composer with the subject of what we are answering, so the
+  // reply threads in their client instead of starting a new conversation.
+  // enquiries is newest-first, so this is the message being answered.
+  const replySubject = replySubjectFor(
+    enquiries.find((e) => e.direction === "inbound")?.subject,
+  );
+
   // Other people writing from the same employer. Kept separate from this
   // contact's own history: a colleague is context, not the same relationship.
   const { data: colleagueData } = contact.company_id
@@ -71,7 +89,10 @@ export default async function ContactPage({
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">
           {contact.name || contact.email}
         </h1>
-        <p className="mt-0.5 text-sm text-white/70">{contact.email}</p>
+        <div className="mt-0.5 flex flex-wrap items-center gap-3">
+          <p className="text-sm text-white/70">{contact.email}</p>
+          <LiveRecord contactId={id} />
+        </div>
       </div>
 
       <div className="card p-6">
@@ -225,6 +246,11 @@ export default async function ContactPage({
                         <span className={`mr-2 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${outbound ? "bg-slate-100 text-slate-500" : "bg-brand/10 text-brand"}`}>
                           {outbound ? "We" : "They"}
                         </span>
+                        {outbound && message.origin ? (
+                          <span className="mr-2 rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-brand">
+                            {ORIGIN_LABELS[message.origin] ?? message.origin}
+                          </span>
+                        ) : null}
                         {message.summary || message.subject || "(no subject)"}
                       </p>
                       <span className="flex shrink-0 items-center gap-2">
@@ -289,39 +315,56 @@ export default async function ContactPage({
             })}
         </ol>
 
-        {/* Logging a reply keeps the record honest about whose turn it is.
-            Replies also arrive automatically if the intake address is BCC'd
-            and OWNER_EMAILS is configured. */}
-        <form
-          action={async (formData: FormData) => {
+        <ReplyComposer
+          to={contact.email}
+          defaultSubject={replySubject}
+          action={async (_prev: ReplyResult, formData: FormData) => {
             "use server";
-            await logReply(id, formData);
+            return sendReply(id, _prev, formData);
           }}
-          className="mt-4 rounded-lg border border-dashed border-slate-300 p-4"
-        >
-          <h3 className="text-sm font-medium text-slate-900">Log a reply you sent</h3>
-          <input
-            name="subject"
-            placeholder="Subject"
-            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
-          />
-          <textarea
-            name="body"
-            rows={3}
-            required
-            placeholder="What you sent them."
-            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
-          />
-          <button
-            type="submit"
-            className="mt-2 rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-deep"
+        />
+
+        {/* Still needed, and not made redundant by the composer above: a reply
+            given by phone, WhatsApp or in person never existed as an email, so
+            there is nothing to send and nothing to capture — but the record
+            still has to stop saying the ball is in our court. */}
+        <details className="group mt-3">
+          <summary className="flex cursor-pointer items-center gap-1.5 text-xs text-ink-muted hover:text-ink">
+            <Chevron />
+            Record a reply sent elsewhere
+          </summary>
+          <form
+            action={async (formData: FormData) => {
+              "use server";
+              await logReply(id, formData);
+            }}
+            className="mt-2 rounded-xl bg-page p-4"
           >
-            Log reply
-          </button>
-          <span className="ml-3 text-xs text-slate-400">
-            Re-reads the thread and updates the status. Counts against the daily cap.
-          </span>
-        </form>
+            <p className="text-xs text-ink-muted">
+              For an answer given by phone or another channel. Files it in the thread
+              and re-reads the conversation; no email is sent.
+            </p>
+            <input
+              name="subject"
+              placeholder="Subject"
+              className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
+            />
+            <textarea
+              name="body"
+              rows={3}
+              required
+              placeholder="What you told them."
+              className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-900"
+            />
+            <button
+              type="submit"
+              className="mt-2 rounded-lg border border-slate-200 bg-surface px-3.5 py-2 text-sm font-medium text-ink transition-colors hover:bg-slate-50"
+            >
+              Record it
+            </button>
+            <span className="ml-3 text-xs text-ink-muted">Counts against the daily cap.</span>
+          </form>
+        </details>
       </section>
 
       <form

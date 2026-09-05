@@ -68,6 +68,8 @@ export type Enquiry = {
   body_html: string | null;
   status: string;
   direction: "inbound" | "outbound";
+  /** Outbound only. Null on inbound. */
+  origin: "crm" | "email_client" | "manual" | null;
   summary: string | null;
   priority: "urgent" | "high" | "normal" | "low" | null;
   priority_reasoning: string | null;
@@ -91,6 +93,28 @@ export type ContactWithRelations = Contact & {
 };
 
 /** How a rating is written where it stands on its own, as a contact's badge. */
+/**
+ * Where an outbound message came from. Shown on every reply, because "did I
+ * send that from here or from my phone?" is a question the timeline should
+ * answer rather than leave to memory.
+ */
+export const ORIGIN_LABELS: Record<string, string> = {
+  crm: "Sent from CRM",
+  email_client: "Sent from email",
+  manual: "Logged by hand",
+};
+
+/**
+ * The subject to answer a message with. Collapses any run of existing "Re:"
+ * prefixes to one rather than stacking them, and adds one where the original
+ * had none — a first reply otherwise went out with a bare subject and read as
+ * a new conversation in their client.
+ */
+export function replySubjectFor(subject: string | null | undefined): string {
+  const base = (subject ?? "").replace(/^\s*(re\s*:\s*)+/i, "").trim();
+  return base ? `Re: ${base}` : "";
+}
+
 export const PRIORITY_LABELS: Record<string, string> = {
   urgent: "Urgent",
   high: "High priority",

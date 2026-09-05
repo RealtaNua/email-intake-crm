@@ -1,6 +1,11 @@
 import { NextResponse, after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { parseFromHeader, verifyMailgunSignature } from "@/lib/mailgun";
+import {
+  parseFromHeader,
+  parseAddressList,
+  normalizeMessageId,
+  verifyMailgunSignature,
+} from "@/lib/mailgun";
 import { requireEnv } from "@/lib/env";
 import { enrichCompany } from "@/lib/enrichment";
 import { resolveContact } from "@/lib/contacts";
@@ -84,39 +89,67 @@ export async function POST(request: Request) {
   const isOwnReply = owners.includes(senderEmail);
 
   if (isOwnReply) {
-    const toHeader = field("To") ?? field("recipient") ?? "";
-    const toEmail = parseFromHeader(toHeader).email;
-    if (toEmail) {
-      const { data: existing } = await createAdminClient()
-        .from("contacts").select("id").eq("email", toEmail).maybeSingle();
-      if (existing) {
-        const admin = createAdminClient();
-        const { data: reply, error: replyError } = await admin
-          .from("enquiries")
-          .insert({
-            contact_id: existing.id,
-            direction: "outbound",
-            message_id: field("Message-Id") ?? field("message-id"),
-            sender_email: senderEmail,
-            sender_name: parsed.name,
-            recipient: toEmail,
-            subject: field("subject"),
-            body_plain: field("stripped-text") ?? field("body-plain"),
-            body_full: field("body-plain"),
-            body_html: field("body-html"),
-            raw_payload: rawPayload,
-          })
-          .select("id")
-          .single();
+    // Every recipient, not just the first: a reply addressed to two people, or
+    // one where the contact sits in Cc, previously matched the wrong record or
+    // none at all. parseFromHeader is anchored and returns a single address.
+    const candidates = [
+      ...parseAddressList(field("To") ?? field("to")),
+      ...parseAddressList(field("Cc") ?? field("cc")),
+    ].filter((email) => !owners.includes(email));
 
-        if (replyError?.code === "23505") {
-          return NextResponse.json({ ok: true, duplicate: true }, { status: 200 });
-        }
-        console.log("[inbound] stored our own reply to", toEmail);
-        if (reply) after(async () => { await classifyEnquiry(reply.id); });
-        return NextResponse.json({ ok: true, id: reply?.id, direction: "outbound" }, { status: 200 });
-      }
+    const { data: matches } = candidates.length
+      ? await supabase.from("contacts").select("id, email").in("email", candidates)
+      : { data: [] };
+
+    // Preserve To-header order: the first addressee is the person being
+    // answered, and anyone else on the thread is a copy.
+    const existing = candidates
+      .map((email) => matches?.find((m) => m.email === email))
+      .find(Boolean);
+
+    if (!existing) {
+      // Our own message to nobody we have a record of. Falling through to the
+      // normal path here is what created a contact for the operator: the
+      // sender is us, so resolveContact would file the message as an enquiry
+      // from ourselves. Drop it instead.
+      console.log("[inbound] own message with no known recipient, skipped");
+      return NextResponse.json({ ok: true, skipped: "own message, unknown recipient" }, { status: 200 });
     }
+
+    const { data: reply, error: replyError } = await supabase
+      .from("enquiries")
+      .insert({
+        contact_id: existing.id,
+        direction: "outbound",
+        origin: "email_client",
+        message_id: normalizeMessageId(field("Message-Id") ?? field("message-id")),
+        sender_email: senderEmail,
+        sender_name: parsed.name,
+        recipient: existing.email,
+        subject: field("subject"),
+        body_plain: field("stripped-text") ?? field("body-plain"),
+        body_full: field("body-plain"),
+        body_html: field("body-html"),
+        raw_payload: rawPayload,
+      })
+      .select("id")
+      .single();
+
+    // 23505 is the unique index on message_id. Either Mailgun redelivered, or
+    // this is the BCC copy of a reply the CRM already sent and recorded under
+    // the same Mailgun id. Both are successes, and neither needs a second row.
+    if (replyError?.code === "23505") {
+      console.log("[inbound] reply already recorded, skipping duplicate");
+      return NextResponse.json({ ok: true, duplicate: true }, { status: 200 });
+    }
+    if (replyError) {
+      console.error("[inbound] reply insert failed:", replyError.code, replyError.message);
+      return NextResponse.json({ error: "insert failed" }, { status: 500 });
+    }
+
+    console.log("[inbound] stored our own reply to", existing.email);
+    after(async () => { await classifyEnquiry(reply.id); });
+    return NextResponse.json({ ok: true, id: reply.id, direction: "outbound" }, { status: 200 });
   }
 
   // Resolve the company and contact this email belongs to before storing the
@@ -132,7 +165,7 @@ export async function POST(request: Request) {
     .from("enquiries")
     .insert({
       contact_id: contactId,
-      message_id: field("Message-Id") ?? field("message-id"),
+      message_id: normalizeMessageId(field("Message-Id") ?? field("message-id")),
       sender_email: senderEmail,
       sender_name: parsed.name,
       recipient: field("recipient"),
