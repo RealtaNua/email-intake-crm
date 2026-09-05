@@ -90,7 +90,7 @@ export default function Home() {
               <Image src="/logo-white.png" alt="" width={24} height={24} />
               <b>Intake CRM</b>
               <div className={styles.tabs}>
-                <span className={cx(styles.tab, styles.tabOn)}>Contacts</span>
+                <span className={cx(styles.tab, styles.tabOn)}>Leads</span>
                 <span className={styles.tab}>Companies</span>
                 <span className={styles.tab}>Usage</span>
               </div>
@@ -99,7 +99,7 @@ export default function Home() {
             <div className={styles.frameBody}>
               <div className={styles.stats}>
                 <div className={styles.stat}>
-                  <div className={styles.k}>Contacts</div>
+                  <div className={styles.k}>Leads</div>
                   <div className={styles.v}>6</div>
                   <div className={styles.rule}></div>
                   <div className={styles.c}>&nbsp;</div>

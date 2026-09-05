@@ -40,7 +40,7 @@ export default async function DashboardLayout({
             </Link>
 
             <nav className="flex items-center gap-1" aria-label="Main">
-              <NavLink href="/dashboard">Contacts</NavLink>
+              <NavLink href="/dashboard">Leads</NavLink>
               <NavLink href="/dashboard/companies">Companies</NavLink>
               <NavLink href="/dashboard/usage">Usage</NavLink>
             </nav>

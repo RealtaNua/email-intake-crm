@@ -153,7 +153,7 @@ export default async function DashboardPage() {
     <>
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">Contacts</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-white">Leads</h1>
           <p className="mt-0.5 text-sm text-white/70">
             Inbound to intake@mg.storyworks.asia
           </p>
@@ -161,7 +161,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <StatTile label="Contacts" value={states.length} accent="brand" />
+        <StatTile label="Leads" value={states.length} accent="brand" />
         <StatTile label="Waiting on us" value={waitingOnUs} accent="amber" hint="Ball in our court" />
         <StatTile label="Urgent" value={urgent} accent="red" hint="Needs a reply today" />
         <StatTile

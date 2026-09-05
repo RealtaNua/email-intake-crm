@@ -33,7 +33,7 @@ export default async function CompaniesPage() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight text-white">Companies</h1>
         <p className="mt-0.5 text-sm text-white/70">
-          Researched once per domain. Contacts from a known company reuse the profile
+          Researched once per domain. Leads from a known company reuse the profile
           rather than paying for it again.
         </p>
       </header>
