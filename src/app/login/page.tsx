@@ -48,7 +48,7 @@ function LoginForm() {
       // registered — anything else turns this form into an address checker.
       return setNotice(
         "If that address has an account, a reset link is on its way. " +
-          "Delivery runs through Supabase's built-in mailer, so allow a few minutes, and check spam.",
+          "Allow a few minutes, and check spam.",
       );
     }
 
