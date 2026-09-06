@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-type Mode = "signin" | "signup";
+type Mode = "signin" | "signup" | "reset";
 
 function LoginForm() {
   const router = useRouter();
@@ -32,6 +32,26 @@ function LoginForm() {
     try {
     const supabase = createClient();
 
+    // Password recovery. The link lands on /auth/callback, which exchanges
+    // the code for a session and forwards to /auth/update-password. Reusing
+    // the existing callback means no second URL to add to Supabase's redirect
+    // allowlist.
+    if (mode === "reset") {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/auth/update-password")}`,
+      });
+      setBusy(false);
+
+      if (error) return setError(error.message);
+
+      // Deliberately the same message whether or not the address is
+      // registered — anything else turns this form into an address checker.
+      return setNotice(
+        "If that address has an account, a reset link is on its way. " +
+          "Delivery runs through Supabase's built-in mailer, so allow a few minutes, and check spam.",
+      );
+    }
+
     if (mode === "signup") {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -48,7 +68,7 @@ function LoginForm() {
       // UI claims a new account was created when nothing happened.
       if (data.user && data.user.identities?.length === 0) {
         return setNotice(
-          "An account with this email already exists. Try signing in, or use the confirmation link already sent to you.",
+          "An account with this email already exists. Try signing in, or reset the password if you have forgotten it.",
         );
       }
 
@@ -125,10 +145,16 @@ function LoginForm() {
         <span className="text-[15px] font-semibold tracking-tight text-ink">Intake&nbsp;CRM</span>
       </div>
       <h1 className="text-xl font-semibold tracking-tight text-ink">
-        {mode === "signin" ? "Sign in" : "Create an account"}
+        {mode === "signin" ? "Sign in" : mode === "signup" ? "Create an account" : "Reset your password"}
       </h1>
-      <p className="mt-1 text-sm text-ink-muted">Email intake and triage</p>
+      <p className="mt-1 text-sm text-ink-muted">
+        {mode === "reset"
+          ? "We'll email you a link to set a new one."
+          : "Email intake and triage"}
+      </p>
 
+      {mode === "reset" ? null : (
+      <>
       <button
         type="button"
         onClick={handleGoogle}
@@ -149,8 +175,10 @@ function LoginForm() {
         <span className="text-xs text-ink-muted">or</span>
         <hr className="flex-1 border-slate-100" />
       </div>
+      </>
+      )}
 
-      <form onSubmit={handleEmailPassword} className="space-y-3">
+      <form onSubmit={handleEmailPassword} className={mode === "reset" ? "mt-6 space-y-3" : "space-y-3"}>
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-ink">Email</label>
           <input
@@ -159,6 +187,7 @@ function LoginForm() {
             className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm outline-none transition-colors focus:border-brand focus:bg-white"
           />
         </div>
+        {mode === "reset" ? null : (
         <div>
           <label htmlFor="password" className="block text-sm font-medium text-ink">Password</label>
           <input
@@ -168,6 +197,19 @@ function LoginForm() {
             className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm outline-none transition-colors focus:border-brand focus:bg-white"
           />
         </div>
+        )}
+
+        {mode === "signin" ? (
+          <p className="text-right">
+            <button
+              type="button"
+              onClick={() => { setMode("reset"); setError(null); setNotice(null); }}
+              className="text-sm font-medium text-brand hover:underline"
+            >
+              Forgot password?
+            </button>
+          </p>
+        ) : null}
 
         {error ? (
           <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>
@@ -180,12 +222,18 @@ function LoginForm() {
           type="submit" disabled={busy}
           className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-deep disabled:opacity-50"
         >
-          {busy ? "Working…" : mode === "signin" ? "Sign in" : "Create account"}
+          {busy
+            ? "Working…"
+            : mode === "signin"
+              ? "Sign in"
+              : mode === "signup"
+                ? "Create account"
+                : "Send reset link"}
         </button>
       </form>
 
       <p className="mt-6 text-center text-sm text-ink-muted">
-        {mode === "signin" ? "No account yet?" : "Already have an account?"}{" "}
+        {mode === "signin" ? "No account yet?" : mode === "signup" ? "Already have an account?" : "Remembered it?"}{" "}
         <button
           type="button"
           onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(null); setNotice(null); }}
