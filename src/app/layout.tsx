@@ -16,6 +16,10 @@ export const metadata: Metadata = {
   title: "Email Intake & Triage CRM",
   description:
     "Inbound enquiries received by email, enriched with a company profile and triaged by priority.",
+  other: {
+    "zero-threat-verification":
+      "zeroThreat=MTExNTY=TVRFeE5UWT0=TVRFeE5UWT",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
