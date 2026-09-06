@@ -6,7 +6,7 @@ this file holds everything that changes.
 
 **Keep it current.** It is loaded as fact, so anything stale here is read as true.
 
-Last updated: 2026-09-06 · 63 commits · 13 migrations
+Last updated: 2026-09-07 · 72 commits · 13 migrations
 
 ---
 
@@ -123,6 +123,23 @@ though its columns existed — that push applied it idempotently.
   and `/dashboard/usage` all 307 to `/login` with no cookie *and* with a forged
   one (middleware uses `getUser()`); and `POST /api/inbound/mailgun` returns
   `{"error":"invalid signature"}` with a bad signature and with none.
+- **Password reset exists** (2026-09-07). It never did: sign-up and sign-in
+  were both built and verified, but nothing called `resetPasswordForEmail` or
+  `updateUser`, so an email/password account with a forgotten password was
+  unreachable. Found while checking whether sign-up had wrongly reported
+  `cskoh@storyworks.asia` as already existing — it had not; the account was
+  genuinely created on 2026-08-28 and confirmed 17 seconds later. "Forgot
+  password?" on the sign-in form emails a link that routes through the existing
+  `/auth/callback` with `next=/auth/update-password`, reusing the code exchange
+  and allowlist entry that already worked rather than adding a second landing
+  URL. The notice is worded identically whether or not the address exists, for
+  the same non-enumeration reason `signUp` obfuscates an existing email.
+  **Verified end to end on 2026-09-07**: link requested, clicked, password set,
+  confirmed in the auth record (`last_sign_in_at` and `updated_at` one second
+  apart). The `?next=` parameter passed the redirect allowlist.
+- **The wordmark links home.** The logo and "Intake CRM" sat at the top of every
+  auth screen looking like a link and doing nothing; both auth screens now link
+  it to `/`.
 - **A privacy policy exists** at `/privacy`, linked from the landing footer and
   the login page. It names the four processors and their regions, the US
   transfer, PDPA rights, the absence of an automated deletion schedule, and the
@@ -218,7 +235,8 @@ rotated. Its only remaining use is reading routes, so rotating it is low risk.
 ## Auth state
 
 - Google sign-in: working (`chinsiongk@gmail.com`)
-- Email/password: working (`cskoh@webfirestudios.com`)
+- Email/password: working (`cskoh@webfirestudios.com`, `cskoh@storyworks.asia`)
+- Password reset: working, exercised end to end on 2026-09-07
 - Email confirmation is **enabled**; delivery works but takes ~3 minutes
 - Disabling confirmation would only affect *new* sign-ups — existing unconfirmed
   accounts stay unconfirmed permanently
