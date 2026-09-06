@@ -61,10 +61,14 @@ export default function UpdatePasswordPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand to-brand-deep px-6 py-16">
       <div className="card w-full max-w-sm p-8">
-        <div className="mb-6 flex items-center gap-2.5">
+        {/* The wordmark is the way back out to the public landing page. */}
+        <Link
+          href="/"
+          className="mb-6 flex w-fit items-center gap-2.5 transition-opacity hover:opacity-70"
+        >
           <Image src="/logo.png" alt="" width={36} height={36} className="h-9 w-9" />
           <span className="text-[15px] font-semibold tracking-tight text-ink">Intake&nbsp;CRM</span>
-        </div>
+        </Link>
         <h1 className="text-xl font-semibold tracking-tight text-ink">Set a new password</h1>
 
         {checking ? (
