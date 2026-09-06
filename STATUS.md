@@ -6,7 +6,7 @@ this file holds everything that changes.
 
 **Keep it current.** It is loaded as fact, so anything stale here is read as true.
 
-Last updated: 2026-09-05 · 62 commits · 13 migrations
+Last updated: 2026-09-06 · 63 commits · 13 migrations
 
 ---
 
@@ -106,6 +106,28 @@ though its columns existed — that push applied it idempotently.
   headers; the fixtures were inserted with five hand-written fields. Blocked
   threads get a dialog in the composer, and `sendReply` refuses independently
   because a server action is a public endpoint.
+- **Independently pen-tested, then hardened** (2026-09-06). An authenticated
+  ZeroThreat scan reported **0 critical, 0 high**, TLS certificate **A+**, and
+  45 findings that were *all* missing HTTP security headers. `next.config.ts`
+  now sets CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy and
+  Permissions-Policy, and drops `x-powered-by`. Two findings were **not** acted
+  on, deliberately: HSTS was already present (Vercel sets it at the edge —
+  verified with `curl -D -`, so the scan's finding is a false positive), and
+  `Server: Vercel` cannot be removed on this platform. Coverage caveat: the scan
+  authenticated successfully but crawled **1 page, 0 forms, 3 APIs, 0 auth URIs**
+  — the findings are the public perimeter, not the dashboard.
+- **The access boundary was verified directly**, since the scan did not reach
+  behind the login. All three checks passed against production on 2026-09-06:
+  the public anon key with no session returns `[]` on `enquiries`, `contacts`
+  and `companies` and `42501` on insert; `/dashboard`, `/dashboard/companies`
+  and `/dashboard/usage` all 307 to `/login` with no cookie *and* with a forged
+  one (middleware uses `getUser()`); and `POST /api/inbound/mailgun` returns
+  `{"error":"invalid signature"}` with a bad signature and with none.
+- **A privacy policy exists** at `/privacy`, linked from the landing footer and
+  the login page. It names the four processors and their regions, the US
+  transfer, PDPA rights, the absence of an automated deletion schedule, and the
+  fact that the visible contacts are synthetic. Keep it true: it describes the
+  system as it behaves, so a change to the data flow is a change to that page.
 
 ## Current data
 

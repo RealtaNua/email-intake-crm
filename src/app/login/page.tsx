@@ -2,6 +2,7 @@
 
 import { useState, Suspense } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -192,6 +193,12 @@ function LoginForm() {
         >
           {mode === "signin" ? "Create one" : "Sign in"}
         </button>
+      </p>
+
+      <p className="mt-4 text-center text-xs text-ink-muted">
+        <Link href="/privacy" className="hover:underline">
+          Privacy policy
+        </Link>
       </p>
       </div>
     </main>

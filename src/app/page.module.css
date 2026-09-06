@@ -772,3 +772,10 @@
   border: 1px solid var(--line);
   color: var(--muted);
 }
+
+.foot p a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.foot p a:hover { opacity: .7; }

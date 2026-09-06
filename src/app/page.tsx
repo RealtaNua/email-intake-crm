@@ -695,7 +695,7 @@ export default function Home() {
           <div className={cx(styles.wrap, styles.foot)}>
             <p>
               Intake CRM — an inbound enquiry handling system by Storyworks
-              Consulting.
+              Consulting. <Link href="/privacy">Privacy policy</Link>
             </p>
             <div className={styles.stack}>
               <span className={styles.chip}>Next.js</span>
